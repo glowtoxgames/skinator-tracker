@@ -1,8 +1,12 @@
 .idea-category-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
   gap: 5px;
 }
 .idea-category-row .idea-category-btn { min-width: 0; width: 100%; }
 .idea-category-rename { border: 1px solid #34373d; border-radius: 8px; background: #17191e; color: #b7bbc1; cursor: pointer; }
 .idea-category-rename:hover { border-color: #a63840; color: #fff; background: #2a171a; }
+.idea-category-delete { border:1px solid #542b30;border-radius:8px;background:#211316;color:#da5961;cursor:pointer;font-size:16px }
+.idea-category-delete:hover { border-color:#d1434c;background:#35171b;color:#fff }
+.task-line:not(.task-header){border-left:4px solid var(--task-category)}
+.task-category-select{border-color:var(--category-color)!important;color:var(--category-color)!important;background:color-mix(in srgb,var(--category-color) 12%,#15171b)!important}
