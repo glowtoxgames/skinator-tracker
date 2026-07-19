@@ -54,16 +54,55 @@ const outreachSeed=outreachSeedText.split('\n').map((line,index)=>{const [name,c
 const ideaCategorySeedNames=['General Ideas','God Modifier Ideas','Support Modifier Ideas','Attack Modifier Ideas','Node Ideas','Quest Ideas','Companion Ideas','Map Ideas','NPC Ideas','LVL 3'];
 const ideaSeedData={
 'General Ideas':[
-['Parts sets','Instead of limiting modifiers an enemy can have, multiple parts from the same enemy grant escalating set bonuses. Show the full set information on the swap screen.'],
-['Special reward combat node','High-level or four-enemy nodes can award a chest containing special rewards such as reroll-price resets, extra gold, shop discounts, healing, or cheaper fleeing.'],
-['Turbocharge','Disabling enemy parts fills a persistent turbocharge bar. Once full, turbocharge a part for a special effect such as instantly disabling an enemy part.'],
-['Combo multiplier','Uninterrupted hit pairs build x2, x3, x4 combos. Corrupt and Lacerate can add more hits. Damage or end-of-fight gold can scale with the combo.'],
-['Enemy Skinators','Enemy Skinators move one map square whenever the player moves, randomly or toward the player when visible, creating elite fights and Pac-Man-like pursuit moments.'],
-['Lycanthrope','An encounter with a 50% chance to give something useful or transform into a monster and begin a fight.'],
-['Test your might','Encounter an object with a fixed amount of health that must be broken in one round to receive the reward inside.'],
-['Champion levels','Special levels accessible only with saved champions.'],
-['Repopulate high-level map','Allow a one-time repopulation of the map with high-level enemies for players pursuing extreme builds.'],
-['Condition system expansion','Conditions for player/enemy part health totals, missing and active health, modifier counts, targeting state, disabled state, God Eye effects, health-pool thresholds, limb type and side.']],
+['Parts sets',`Instead of limiting the modifiers an enemy can have, make it so if you have more than 1 part from an enemy you get a "set" bonus like in Diablo.
+
+Every item probably should have a "Set info information" or something on the swap screen where you can check what the set of it could give you.
+
+Stuff like:
+
+Brain Monster
+1 part: No bonus
+2 parts: +1 max health (or speed or whatever)
+3 parts: +2 max health
+4 parts: +3 max health
+5 parts: +4 max health
+6 parts: +5 max health`],
+['Special reward Combat node',`Some nodes (high level, or when they have 4 enemies) give the player a chest after cleared. Inside the chest they can get special rewards:
+
+Diamond: Resets the price of enemy part rerolls
+Ring: Get 10% extra gold rewards from enemies
+Gold Tooth: Price of the roulette drops by 20%
+10% heal
+Price of fleeing a fight reduced by 20%`],
+['Turbocharge?',`Every time you disable a part from your enemy you load up a turbocharge bar (persistent).
+Once the bar is fully charged you can turbocharge one of your parts for a special effect. Could be something like one-shotting an enemy part.`],
+['Combo multiplier',`Every uninterrupted pair of hits starts a combo multiplier: x2, x3, x4 combo.
+Attacks like Corrupt and Lacerate can give you up to an extra x6 combo count.
+Ideally we should see the character pose change on each hit very rapidly when you hit Lacerate or Corrupt.
+
+Damage dealt = gold. We can multiply the amount of gold the player receives on those attacks. Otherwise we could bump the gold reward at the end of the fight.`],
+['Enemy Skinators',`Every time you move on the map, all enemy Skinators on the map move one square—either randomly or toward you if they are within view.
+They are not as hard to kill as the final boss, but they are elite fights you can find maybe after level 5. This can create fun "Pac-Man" moments when you get sandwiched by two incoming enemy Skinators. It would also create the feeling of other players wandering around the map.`],
+['Lycanthrope','An enemy that has a 50% chance of giving you something cool or transforming into a monster and starting a fight.'],
+['Test your might moment','You come across something with X amount of health that you need to break open in one round. Inside there is a reward for the player.'],
+['Champion levels','Champion levels that you can only access with saved champions.'],
+['Repopulate the map',`A way to repopulate the map with high-level enemies for mega-build seekers.
+Maybe you can do it only one time so players still need to play more than once to get that mega build.`],
+['Condition system expansion',`From player / From enemy:
+• Total amount of part health
+• Current amount of part health
+• Missing amount of part health
+• Active amount of part health
+• Amount of modifiers
+• Whether the part is dead
+• Whether the part is affected by a God Eye modifier
+• Amount of health pool under X / over X
+• Leg, arm, head, right limb, left limb and heart-specific conditions
+
+From player:
+• If a part is being targeted by an enemy part
+• If a part is not targeting an enemy part
+• If a part is targeting an enemy part`]],
 'God Modifier Ideas':[
 ['Arm damage slot','Gain +1 damage if an arm is placed in this slot.'],['Leg damage slot','Gain +1 damage if a leg is placed in this slot.'],['Head range slot','Gain +1 range if a head is placed in this slot.'],['Chest range slot','Gain +2 range if a chest is placed in this slot.'],['Arm speed slot','Gain +3 speed if an arm is placed in this slot.'],['Leg speed slot','Gain +3 speed if a leg is placed in this slot.'],['Head speed slot','Gain +3 speed if a head is placed in this slot.'],['Chest speed slot','Gain +3 speed if a chest is placed in this slot.'],['Leg protection slot','A leg in this slot receives no integrity damage this round.'],['Arm protection slot','An arm in this slot receives no integrity damage this round.'],['Head protection slot','A head in this slot receives no integrity damage this round.'],['Chest protection slot','A chest in this slot receives no integrity damage this round.'],['Dead-part healing slot','A dead part in this slot heals the parts above and below by 1.'],['Dead-part speed slot','A dead part in this slot gives the parts above and below +2 speed.'],['Greater Decay','Decay dealing 2 damage instead of 1.'],['Apex Decay','Decay dealing 3 damage instead of 2.'],['Applied attack modifiers','Modifiers that attacking parts can apply, such as poison.'],['Target lock','God Eye modifier that prevents targeting.'],['Hidden intent','Modifier that prevents seeing enemy intent.']],
 'Support Modifier Ideas':[
@@ -110,10 +149,13 @@ const ongoingTaskSeed=[
 const taskOptionSeed=[...['PEDRO','CRAIG','MIXED'].map((name,index)=>({id:`operator-${index+1}`,optionType:'operator',name})),...['UI','SFX','TUTORIAL','CHARACTER ANIMATION','FUNCTIONALITY','BALANCING','RESEARCH','PARTICLES'].map((name,index)=>({id:`category-${index+1}`,optionType:'category',name}))];
 const businessSaved=(()=>{try{return JSON.parse(localStorage.getItem(BUSINESS_KEY))}catch{return null}})();
 let outreachRecords=businessSaved?.outreach?.length?businessSaved.outreach:outreachSeed,publisherRecords=businessSaved?.publishers||[],ideaRecords=businessSaved?.ideas?.length?businessSaved.ideas:ideaSeed,ideaCategoryRecords=businessSaved?.ideaCategories?.length?businessSaved.ideaCategories:ideaCategorySeedNames.map((name,index)=>({id:`idea-category-${index+1}`,name})),ongoingTaskRecords=businessSaved?.ongoingTasks?.length?businessSaved.ongoingTasks:ongoingTaskSeed,taskOptionRecords=businessSaved?.taskOptions?.length?businessSaved.taskOptions:taskOptionSeed,businessEditing=null,businessIdeaCategory='General Ideas';
+const IDEA_SEED_REVISION=2;
+function mergeLatestIdeaSeed(){const existing=new Map(ideaRecords.map(idea=>[idea.id,idea]));ideaSeed.forEach(seed=>existing.set(seed.id,{...(existing.get(seed.id)||{}),...seed}));ideaRecords=[...existing.values()]}
+if((businessSaved?.ideaSeedRevision||0)<IDEA_SEED_REVISION)mergeLatestIdeaSeed();
 const outreachColumns=(()=>{try{return JSON.parse(localStorage.getItem('skinator-outreach-columns'))||{followers:true,email:true,social:true,country:true,timing:true,reply:true}}catch{return{followers:true,email:true,social:true,country:true,timing:true,reply:true}}})();
 const ideaCategoryNames=()=>ideaCategoryRecords.map(c=>c.name),ideaCategories=ideaCategoryNames();
 const taskOptions=type=>taskOptionRecords.filter(o=>o.optionType===type).map(o=>o.name);
-const saveBusiness=()=>{localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords}));window.skinatorCloudSave?.()};
+const saveBusiness=()=>{localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords,ideaSeedRevision:IDEA_SEED_REVISION}));window.skinatorCloudSave?.()};
 
 document.querySelector('aside nav').insertAdjacentHTML('beforeend','<button class="nav" data-tab="outreach"><i>◎</i> OUTREACH <span id="navOutreachCount">0</span></button><button class="nav" data-tab="publishers"><i>◆</i> PUBLISHERS <span id="navPublisherCount">0</span></button><button class="nav" data-tab="ideas"><i>✧</i> IDEAS <span id="navIdeaCount">0</span></button><button class="nav" data-tab="ongoing"><i>✓</i> ONGOING TASKS <span id="navOngoingCount">0</span></button>');
 document.querySelector('main').insertAdjacentHTML('beforeend',`<section id="outreachView" class="business-view" hidden><section class="panel"><div class="toolbar"><label class="search">⌕ <input id="outreachSearch" placeholder="SEARCH CREATORS"></label><select id="outreachReplyFilter" class="toolbar-select"><option value="All">ALL REPLIES</option><option value="Replied">REPLIED</option><option value="Waiting">WAITING</option></select><span id="outreachResultCount"></span><div class="column-picker" id="outreachColumnPicker">${Object.entries({followers:'FOLLOWERS',email:'EMAIL',social:'SOCIAL',country:'COUNTRY',timing:'TIMING',reply:'REPLY'}).map(([key,label])=>`<label><input type="checkbox" data-column="${key}" ${outreachColumns[key]?'checked':''}> ${label}</label>`).join('')}</div></div><div id="outreachGrid" class="outreach-lines"></div></section></section><section id="publishersView" class="business-view" hidden><section class="panel"><div class="toolbar"><label class="search">⌕ <input id="publisherSearch" placeholder="SEARCH PUBLISHERS"></label><span id="publisherResultCount"></span></div><div id="publisherGrid" class="business-grid"></div></section></section><section id="ideasView" class="business-view" hidden><section class="panel ideas-layout"><aside><div id="ideaCategories" class="idea-categories"></div><button class="btn ghost ideas-add-category" id="addIdeaCategory">＋ CATEGORY</button></aside><div><div class="toolbar"><label class="search">⌕ <input id="ideaSearch" placeholder="SEARCH IDEAS"></label><span id="ideaResultCount"></span></div><div id="ideaGrid" class="business-grid"></div></div></section></section><section id="ongoingView" class="business-view" hidden><section class="panel"><div class="toolbar"><label class="search">⌕ <input id="ongoingSearch" placeholder="SEARCH TASKS"></label><select id="ongoingPriority" class="toolbar-select"><option value="All">ALL PRIORITIES</option><option>DO NEXT</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>DO LATER</option></select><select id="ongoingStatus" class="toolbar-select"><option value="All">ALL STATUSES</option><option>NOT STARTED</option><option>WIP</option><option>TO BE IMPLEMENTED</option><option>DONE</option><option>ON HOLD</option></select><span id="ongoingResultCount"></span></div><div class="task-option-actions"><button class="mini" id="addTaskOperator">＋ OPERATOR</button><button class="mini" id="addTaskCategory">＋ CATEGORY</button></div><div id="ongoingGrid" class="task-lines"></div></section></section>`);
