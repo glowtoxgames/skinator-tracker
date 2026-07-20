@@ -10,3 +10,4 @@
 .idea-category-delete:hover { border-color:#d1434c;background:#35171b;color:#fff }
 .task-line:not(.task-header){border-left:4px solid var(--task-category)}
 .task-category-select{border-color:var(--category-color)!important;color:var(--category-color)!important;background:color-mix(in srgb,var(--category-color) 12%,#15171b)!important}
+.task-coded-select{border-color:var(--field-color)!important;color:var(--field-color)!important;background:color-mix(in srgb,var(--field-color) 13%,#15171b)!important;box-shadow:inset 3px 0 0 var(--field-color)}
