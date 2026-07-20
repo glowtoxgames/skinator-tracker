@@ -1,0 +1,58 @@
+/* Keep the production calendar available while browsing a long task backlog. */
+.tracker-layout {
+  align-items: start;
+}
+
+.task-backlog {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: calc(100vh - 24px);
+}
+
+.backlog-tasks {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  grid-auto-rows: minmax(72px, max-content);
+  align-content: start;
+  scrollbar-width: thin;
+  scrollbar-color: #8e2e35 #15171b;
+}
+
+.backlog-tasks .planner-task {
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 10px;
+  flex: 0 0 auto;
+}
+
+.backlog-tasks .planner-task b {
+  display: block;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+}
+
+.backlog-tasks .planner-task small,
+.backlog-tasks .planner-task .task-type {
+  display: block;
+  line-height: 1.35;
+}
+
+.backlog-tasks::-webkit-scrollbar { width: 8px; }
+.backlog-tasks::-webkit-scrollbar-track { background: #15171b; border-radius: 8px; }
+.backlog-tasks::-webkit-scrollbar-thumb { background: #8e2e35; border-radius: 8px; }
+.backlog-tasks::-webkit-scrollbar-thumb:hover { background: #c43f47; }
+
+@media (max-width: 1000px) {
+  .task-backlog {
+    position: static;
+    max-height: 55vh;
+  }
+}
