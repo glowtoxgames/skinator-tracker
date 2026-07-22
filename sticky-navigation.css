@@ -1,0 +1,54 @@
+/* Keep the active page controls visible while records scroll beneath them. */
+:root{--sticky-page-header-height:104px}
+main>header{
+  position:sticky;
+  top:0;
+  z-index:80;
+  margin:-16px 0 18px;
+  padding:16px 0 14px;
+  background:linear-gradient(180deg,#08090b 76%,rgba(8,9,11,.94));
+  border-bottom:1px solid #26282e;
+  box-shadow:0 12px 24px rgba(0,0,0,.34);
+}
+.panel>.toolbar,
+.ideas-layout>div>.toolbar{
+  position:sticky;
+  top:var(--sticky-page-header-height);
+  z-index:60;
+  background:rgba(14,16,19,.98);
+  box-shadow:0 9px 18px rgba(0,0,0,.28);
+  backdrop-filter:blur(8px);
+}
+.task-header{
+  position:sticky;
+  top:calc(var(--sticky-page-header-height) + 62px);
+  z-index:50;
+  background:#14161a;
+  box-shadow:0 7px 14px rgba(0,0,0,.3);
+}
+#trackerView .task-backlog{
+  top:var(--sticky-page-header-height);
+  max-height:calc(100vh - var(--sticky-page-header-height) - 12px);
+}
+#trackerView .calendar-head{
+  position:sticky;
+  top:var(--sticky-page-header-height);
+  z-index:55;
+  background:#0e1013;
+}
+#trackerView .weekday-row{
+  position:sticky;
+  top:calc(var(--sticky-page-header-height) + 68px);
+  z-index:54;
+  background:#0e1013;
+}
+@media(max-width:900px){
+  :root{--sticky-page-header-height:118px}
+  main>header{margin:-10px 0 16px;padding:10px 0 12px}
+  .panel>.toolbar,.ideas-layout>div>.toolbar{overflow-x:auto;flex-wrap:nowrap}
+}
+@media(max-width:600px){
+  :root{--sticky-page-header-height:174px}
+  main>header{padding-top:10px}
+  .task-header{position:static}
+}
