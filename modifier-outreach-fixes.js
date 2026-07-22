@@ -1,26 +1,28 @@
 // Combined modifier counts, additive category filters, Spawn labels and email-sent outreach tracking.
 const selectedModifierCategories=new Set();
+function ensureSpawnModifiersInState(){const spawnIds=new Set(SPAWN_MODIFIER_SEED.map(modifier=>modifier.id));state.modifiers.forEach(modifier=>{if(spawnIds.has(modifier.id))modifier.isSpawn=true});SPAWN_MODIFIER_SEED.forEach(seed=>{if(!state.modifiers.some(modifier=>modifier.id===seed.id))state.modifiers.push({...seed,isSpawn:true,grade:'',zone:'',trigger:'Spawn',iconData:'',superEnabled:false,superName:'',superGrade:'',superDescription:'',updatedAt:new Date().toISOString()})})}
+ensureSpawnModifiersInState();
 
 function modifierCategoryMatches(record){return selectedModifierCategories.size===0||selectedModifierCategories.has(record.isSpawn?'Spawn':record.category)}
 renderModifiers=function(){
   const query=state.modQuery;
-  const spawnRows=SPAWN_MODIFIER_SEED.map(modifier=>({...modifier,isSpawn:true,grade:'',zone:''}));
-  const source=[...state.modifiers,...spawnRows];
+  const spawnRows=state.modifiers.filter(modifier=>modifier.isSpawn);
+  const source=state.modifiers;
   const rows=source.filter(modifier=>modifierCategoryMatches(modifier)&&(state.modGrade==='All'||modifier.grade===state.modGrade)&&(modifier.isSpawn?state.modZone==='All':zoneMatches(modifier))&&`${modifier.name} ${modifier.description} ${modifier.grade} ${modifier.category}`.toLowerCase().includes(query));
   $('navModCount').textContent=source.length;
   $('modifierCount').textContent=source.length;
   $('godEyeCount').textContent=state.modifiers.filter(modifier=>modifier.category==='God Eye').length;
-  $('iconCount').textContent=state.modifiers.filter(modifier=>modifier.icon||modifier.iconData).length+spawnRows.filter(modifier=>modifier.icon).length;
+  $('iconCount').textContent=state.modifiers.filter(modifier=>modifier.icon||modifier.iconData).length;
   $('superCount').textContent=state.modifiers.filter(modifier=>modifier.superEnabled).length;
   $('modifierResultCount').textContent=plural(rows.length,'RESULT');
   $('modifierGrid').innerHTML=rows.map(modifier=>`<article class="mod-card ${modifier.isSpawn?'spawn-database-card':''}" data-id="${modifier.id}" data-spawn="${modifier.isSpawn?'true':'false'}">${modifier.icon||modifier.iconData?`<img class="mod-icon" src="${mediaSrc(modifier)}" onerror="this.style.opacity=.12">`:'<i class="mod-icon spawn-db-placeholder">?</i>'}<div><div class="mod-meta">${modifier.isSpawn?`SPAWN // ${escapeHtml(modifier.category).toUpperCase()}`:`${escapeHtml(modifier.category).toUpperCase()} // ${escapeHtml(modifier.zone||'GLOBAL')}`}${modifier.superEnabled?`<span class="super-mark">✦ SUPER ${modifier.superGrade||modifier.grade}</span>`:''}</div><h3>${escapeHtml(modifier.name)}</h3><p>${escapeHtml(modifier.description)}</p></div>${modifier.isSpawn?'<span class="spawn-db-label">SPAWN</span>':`<img class="grade-icon" src="${gradeIcon(modifier.grade)}" alt="Grade ${modifier.grade}" title="Grade ${modifier.grade}">`}</article>`).join('');
-  document.querySelectorAll('.mod-card[data-spawn="false"]').forEach(card=>card.onclick=()=>openModifier(card.dataset.id));
+  document.querySelectorAll('.mod-card').forEach(card=>card.onclick=()=>openModifier(card.dataset.id));
 };
 
 function refreshModifierFilterButtons(){document.querySelectorAll('.filter[data-category]').forEach(button=>button.classList.toggle('active',button.dataset.category==='All'?selectedModifierCategories.size===0:selectedModifierCategories.has(button.dataset.category)))}
 document.querySelectorAll('.filter[data-category]').forEach(button=>button.onclick=()=>{const category=button.dataset.category;if(category==='All')selectedModifierCategories.clear();else{selectedModifierCategories.has(category)?selectedModifierCategories.delete(category):selectedModifierCategories.add(category)}if(selectedModifierCategories.has('Spawn')){state.modZone='All';state.modGrade='All';$('modifierZoneFilter').value='All';$('modifierGradeFilter').value='All'}refreshModifierFilterButtons();renderModifiers()});
 const renderBeforeModifierCountFix=render;
-render=function(){renderBeforeModifierCountFix();$('navModCount').textContent=state.modifiers.length+SPAWN_MODIFIER_SEED.length;refreshModifierFilterButtons()};
+render=function(){renderBeforeModifierCountFix();$('navModCount').textContent=state.modifiers.length;refreshModifierFilterButtons()};
 
 $('outreachReplyFilter').innerHTML='<option value="All">ALL EMAIL STATUS</option><option value="Sent">EMAIL SENT</option><option value="Not sent">EMAIL NOT SENT</option>';
 const emailSentColumnLabel=$('outreachColumnPicker').querySelector('[data-column="reply"]')?.closest('label');
@@ -36,4 +38,8 @@ renderOutreach=function(){
 };
 $('outreachReplyFilter').onchange=renderOutreach;
 $('outreachSearch').oninput=renderOutreach;
+['Offensive','Defensive','Passive'].forEach(category=>{if(!$('modifierCategory').querySelector(`option[value="${category}"]`))$('modifierCategory').insertAdjacentHTML('beforeend',`<option value="${category}">${category.toUpperCase()}</option>`)});
+if(!$('modifierGrade').querySelector('option[value=""]'))$('modifierGrade').insertAdjacentHTML('afterbegin','<option value="">N/A // SPAWN</option>');
+renderSuperPicker=function(selected){$('superPicker').innerHTML=state.modifiers.filter(modifier=>modifier.category!=='God Eye'&&!modifier.isSpawn).map(modifier=>`<label class="pick"><img src="${mediaSrc(modifier)}"><span><b>${escapeHtml(modifier.superName||`Super ${modifier.name}`)}</b><small>${modifier.category} // GRADE ${modifier.superGrade||modifier.grade}</small></span><input type="checkbox" value="${modifier.id}" ${selected.includes(modifier.id)?'checked':''}></label>`).join('')};
+renderSpawnPicker=function(selected=[]){const spawnRows=state.modifiers.filter(modifier=>modifier.isSpawn);$('spawnModifierPicker').innerHTML=spawnRows.map(modifier=>`<label class="spawn-mod-pick" title="${escapeHtml(modifier.description)}">${modifier.icon||modifier.iconData?`<img src="${mediaSrc(modifier)}" alt="">`:'<i class="spawn-icon-missing">?</i>'}<span><b>${escapeHtml(modifier.name).toUpperCase()}</b><small>${escapeHtml(modifier.category).toUpperCase()}</small><em>${escapeHtml(modifier.description)}</em></span><input type="checkbox" value="${modifier.id}" ${selected.includes(modifier.id)?'checked':''}></label>`).join('');$('spawnModifierPicker').querySelectorAll('input').forEach(input=>input.onchange=()=>{const checked=[...$('spawnModifierPicker').querySelectorAll('input:checked')];if(checked.length>2){input.checked=false;toast('A SPAWN CAN HAVE A MAXIMUM OF 2 MODIFIERS')}})};
 renderModifiers();renderOutreach();
