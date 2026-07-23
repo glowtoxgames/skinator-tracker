@@ -2,15 +2,20 @@
 const selectedModifierCategories=new Set();
 function ensureSpawnModifiersInState(){const spawnIds=new Set(SPAWN_MODIFIER_SEED.map(modifier=>modifier.id));state.modifiers.forEach(modifier=>{if(spawnIds.has(modifier.id))modifier.isSpawn=true;if(modifier.isSpawn&&!modifier.grade)modifier.grade='B'});SPAWN_MODIFIER_SEED.forEach(seed=>{if(!state.modifiers.some(modifier=>modifier.id===seed.id))state.modifiers.push({...seed,isSpawn:true,grade:'B',zone:'',trigger:'Spawn',iconData:'',superEnabled:false,superName:'',superGrade:'',superDescription:'',updatedAt:new Date().toISOString()})})}
 ensureSpawnModifiersInState();
+function normalizeModifierText(value=''){
+  if(typeof normalizeModifierDescription==='function')return normalizeModifierDescription(value);
+  const colors={'HEALTH POOL':'green',DAMAGE:'red',ATTACK:'red',POWER:'red',HEALTH:'green',RANGE:'yellow',SPEED:'white'};
+  return String(value).replace(/<\/?color(?:=[^>]+)?>/gi,'').toUpperCase().replace(/\b(HEALTH POOL|DAMAGE|ATTACK|POWER|HEALTH|RANGE|SPEED)\b/g,word=>`<color=${colors[word]}>${word}</color>`);
+}
 state.modifiers.forEach(modifier=>{
   modifier.name=(modifier.name||'').toUpperCase();
-  modifier.description=normalizeModifierDescription(modifier.description);
+  modifier.description=normalizeModifierText(modifier.description);
   modifier.superName=(modifier.superName||'').toUpperCase();
-  modifier.superDescription=normalizeModifierDescription(modifier.superDescription);
+  modifier.superDescription=normalizeModifierText(modifier.superDescription);
 });
 
 function modifierDescriptionHtml(description=''){
-  const plain=normalizeModifierDescription(description).replace(/<\/?color(?:=[^>]+)?>/gi,'');
+  const plain=normalizeModifierText(description).replace(/<\/?color(?:=[^>]+)?>/gi,'');
   return escapeHtml(plain).replace(/\b(health pool|damage|attack|power|health|speed|range)\b/gi,(word)=>{
     const type=/^(damage|attack|power)$/i.test(word)?'power':/^health(?: pool)?$/i.test(word)?'health':/^speed$/i.test(word)?'speed':'range';
     return `<strong class="modifier-keyword modifier-keyword-${type}">${word}</strong>`;
@@ -65,9 +70,9 @@ openModifier=function(id){
   openModifierBeforeFormatting(id);
   $('modifierDialogTitle').textContent=$('modifierDialogTitle').textContent.toUpperCase();
   $('modifierName').value=$('modifierName').value.toUpperCase();
-  $('modifierDescription').value=normalizeModifierDescription($('modifierDescription').value);
+  $('modifierDescription').value=normalizeModifierText($('modifierDescription').value);
   $('superName').value=$('superName').value.toUpperCase();
-  $('superDescription').value=normalizeModifierDescription($('superDescription').value);
+  $('superDescription').value=normalizeModifierText($('superDescription').value);
 };
 
 function uppercaseModifierField(event){
@@ -84,16 +89,16 @@ $('modifierName').oninput=uppercaseModifierField;
 $('superName').oninput=uppercaseModifierField;
 $('modifierDescription').oninput=uppercaseUnityModifierField;
 $('superDescription').oninput=uppercaseUnityModifierField;
-$('modifierDescription').onblur=event=>event.target.value=normalizeModifierDescription(event.target.value);
-$('superDescription').onblur=event=>event.target.value=normalizeModifierDescription(event.target.value);
+$('modifierDescription').onblur=event=>event.target.value=normalizeModifierText(event.target.value);
+$('superDescription').onblur=event=>event.target.value=normalizeModifierText(event.target.value);
 
 $('modifierForm').addEventListener('submit',()=>{
   const modifier=state.editingMod?state.modifiers.find(item=>item.id===state.editingMod):state.modifiers[0];
   if(!modifier)return;
   modifier.name=(modifier.name||'').toUpperCase();
-  modifier.description=normalizeModifierDescription(modifier.description);
+  modifier.description=normalizeModifierText(modifier.description);
   modifier.superName=(modifier.superName||'').toUpperCase();
-  modifier.superDescription=normalizeModifierDescription(modifier.superDescription);
+  modifier.superDescription=normalizeModifierText(modifier.superDescription);
   save();
   render();
 });
