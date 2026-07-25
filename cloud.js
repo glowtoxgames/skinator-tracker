@@ -4,7 +4,7 @@ const cloudClient=CLOUD_CONFIG&&window.supabase?.createClient(CLOUD_CONFIG.url,C
 let cloudUser=null,cloudRole=null,cloudReady=false,cloudSaving=false,cloudTimer=null,cloudServerSignature='',cloudPresenceChannel=null,cloudReloadTimer=null;
 const cloudRemoteKeys=new Set(),cloudHashes=new Map(),cloudAssetPaths=new Map();
 
-document.body.insertAdjacentHTML('beforeend',`<section class="cloud-auth" id="cloudAuth"><form class="cloud-login" id="cloudLogin"><div class="cloud-mark">S</div><small>SKINATOR SHARED CONTROL ROOM</small><h1>Team sign in</h1><p>Use the account approved for this production tracker.</p><label>EMAIL<input id="cloudEmail" type="email" required autocomplete="email"></label><label>PASSWORD<input id="cloudPassword" type="password" required autocomplete="current-password"></label><button class="btn red" type="submit">SIGN IN</button><p class="cloud-error" id="cloudError"></p></form></section><div class="cloud-bar" id="cloudBar" hidden><i class="cloud-dot"></i><div><b id="cloudState">CONNECTED</b><small id="cloudIdentity"></small><small class="cloud-online" id="cloudOnline">1 ONLINE</small></div><button class="cloud-logout" id="cloudLogout">SIGN OUT</button></div><section class="cloud-migrate" id="cloudMigrate" hidden><div><b>SUPABASE IS EMPTY</b><p>Your local tracker is still safe. Upload its current characters, modifiers, NPCs, Parasytes and calendar to create the shared version.</p></div><button class="btn red" id="cloudUploadLocal">UPLOAD LOCAL TRACKER</button></section>`);
+document.body.insertAdjacentHTML('beforeend',`<section class="cloud-auth" id="cloudAuth"><form class="cloud-login" id="cloudLogin"><div class="cloud-mark">S</div><small>SKINATOR SHARED CONTROL ROOM</small><h1>Team sign in</h1><p>Use the account approved for this production tracker.</p><label>EMAIL<input id="cloudEmail" type="email" required autocomplete="email"></label><label>PASSWORD<input id="cloudPassword" type="password" required autocomplete="current-password"></label><button class="btn red" type="submit">SIGN IN</button><p class="cloud-error" id="cloudError"></p></form></section><div class="cloud-bar" id="cloudBar" hidden><i class="cloud-dot"></i><div><b id="cloudState">CONNECTED</b><small id="cloudIdentity"></small><small class="cloud-online" id="cloudOnline">1 ONLINE</small></div><button class="cloud-logout" id="cloudLogout">SIGN OUT</button></div><section class="cloud-migrate" id="cloudMigrate" hidden><div><b>SUPABASE IS EMPTY</b><p>Your local tracker is still safe. Upload its current characters, modifiers, NPCs, Parasites and calendar to create the shared version.</p></div><button class="btn red" id="cloudUploadLocal">UPLOAD LOCAL TRACKER</button></section>`);
 
 const cloudSetState=(label,synced=false)=>{const bar=$('cloudBar');$('cloudState').textContent=label;bar.classList.toggle('synced',synced)};
 const cloudStable=value=>JSON.stringify(value,Object.keys(value||{}).sort());
@@ -23,6 +23,20 @@ async function cloudSerialize(kind,id,source){
   return data;
 }
 async function cloudSigned(path){const {data,error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).createSignedUrl(path,60*60*24);if(error)throw error;return data.signedUrl}
+window.skinatorRefreshCloudImage=async image=>{
+  if(!image)return;
+  const path=image.dataset.storagePath,fallback=image.dataset.fallback;
+  const useFallback=()=>{
+    if(!fallback||image.dataset.refreshing==='fallback')return;
+    image.dataset.refreshing='fallback';
+    image.src=fallback;
+  };
+  if(image.dataset.refreshing==='true'){useFallback();return}
+  if(!path){useFallback();return}
+  image.dataset.refreshing='true';
+  try{image.src=await cloudSigned(path)}
+  catch(error){console.error('Cloud image refresh failed',error);useFallback()}
+};
 async function cloudHydrate(kind,source){
   const data=structuredClone(source),fields=cloudAssetFields[kind]||[];
   for(const field of fields){const value=data[field];if(typeof value==='string'&&value.startsWith('storage://')){const path=value.slice(10);cloudAssetPaths.set(`${kind}:${data.id}:${field}`,path);data[`${field}StoragePath`]=path;data[field]=await cloudSigned(path)}}
@@ -57,7 +71,7 @@ async function cloudLoad(isRefresh=false){
   cloudRemoteKeys.clear();cloudHashes.clear();cloudAssetPaths.clear();const grouped={character:[],modifier:[],npc:[],parasyte:[],outreach:[],publisher:[],idea:[],idea_category:[],ongoing_task:[],task_option:[]};for(const row of rows){const key=`${row.record_type}:${row.id}`;cloudRemoteKeys.add(key);cloudHashes.set(key,JSON.stringify(row.data));grouped[row.record_type]?.push(await cloudHydrate(row.record_type,row.data))}
   state.characters=grouped.character;state.modifiers=grouped.modifier;ensureSpawnModifiersInState();state.npcs=grouped.npc;parasytes=grouped.parasyte;
   const {data:plan,error:planError}=await cloudClient.from('skinator_planner').select('data,updated_at').eq('id','main').maybeSingle();if(planError)throw planError;if(plan?.data){Object.keys(planner).forEach(k=>delete planner[k]);Object.assign(planner,plan.data)}const businessInitialized=!!planner.businessInitialized,categoriesInitialized=!!planner.ideaCategoriesInitialized,tasksInitialized=!!planner.ongoingTasksInitialized,optionsInitialized=!!planner.taskOptionsInitialized,needsIdeaMigration=(planner.ideaSeedRevision||0)<IDEA_SEED_REVISION,recoveredMissingBusiness=(!grouped.outreach.length&&outreachRecords.length)||(!grouped.idea.length&&ideaRecords.length)||(!grouped.idea_category.length&&ideaCategoryRecords.length)||(!grouped.ongoing_task.length&&ongoingTaskRecords.length)||(!grouped.task_option.length&&taskOptionRecords.length);if(grouped.outreach.length)outreachRecords=grouped.outreach;if(grouped.publisher.length)publisherRecords=grouped.publisher;if(grouped.idea.length)ideaRecords=grouped.idea;if(grouped.idea_category.length)ideaCategoryRecords=grouped.idea_category;if(grouped.ongoing_task.length)ongoingTaskRecords=grouped.ongoing_task;if(grouped.task_option.length)taskOptionRecords=grouped.task_option;if(needsIdeaMigration){mergeLatestIdeaSeed();planner.ideaSeedRevision=IDEA_SEED_REVISION}if(!businessInitialized)planner.businessInitialized=true;if(!categoriesInitialized)planner.ideaCategoriesInitialized=true;if(!tasksInitialized)planner.ongoingTasksInitialized=true;if(!optionsInitialized)planner.taskOptionsInitialized=true;localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords,ideaSeedRevision:IDEA_SEED_REVISION}));cloudServerSignature=cloudMakeSignature(rows,plan?.updated_at);
-  cloudReady=true;render();renderParasytes();renderTracker();renderBusiness();cloudSetState('ALL CHANGES SAVED',true);toast(isRefresh?'TEAM CHANGES LOADED':'SHARED TRACKER LOADED');if(!businessInitialized||!categoriesInitialized||!tasksInitialized||!optionsInitialized||recoveredMissingBusiness||needsIdeaMigration)window.skinatorCloudSave();
+  cloudReady=true;render();renderParasites();renderTracker();renderBusiness();cloudSetState('ALL CHANGES SAVED',true);toast(isRefresh?'TEAM CHANGES LOADED':'SHARED TRACKER LOADED');if(!businessInitialized||!categoriesInitialized||!tasksInitialized||!optionsInitialized||recoveredMissingBusiness||needsIdeaMigration)window.skinatorCloudSave();
 }
 async function cloudStart(session){
   await window.skinatorLocalReady;
