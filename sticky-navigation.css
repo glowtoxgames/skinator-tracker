@@ -20,9 +20,7 @@ main>header{
   backdrop-filter:blur(8px);
 }
 .task-header{
-  position:sticky;
-  top:calc(var(--sticky-page-header-height) + 62px);
-  z-index:50;
+  position:static;
   background:#14161a;
   box-shadow:0 7px 14px rgba(0,0,0,.3);
 }

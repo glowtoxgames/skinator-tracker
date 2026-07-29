@@ -1,0 +1,12 @@
+.shared-completion{color:transparent}
+.shared-completion[aria-pressed="true"]{color:#70dc96;border-color:#348454;background:#173321}
+.planner-task.operator-craig{border-left-color:#4da3ff;background:linear-gradient(90deg,rgba(77,163,255,.16),#191b20 45%)}
+.planner-task.operator-pedro{border-left-color:#f2c94c;background:linear-gradient(90deg,rgba(242,201,76,.16),#191b20 45%)}
+.duration-segment{position:relative;z-index:2;min-height:48px;border-radius:0}
+.duration-segment.duration-start{margin-right:-8px;border-radius:6px 0 0 6px}
+.duration-segment.duration-middle{margin-left:-8px;margin-right:-8px;border-left:0;border-right:0}
+.duration-segment.duration-end{margin-right:0;border-radius:0 6px 6px 0}
+.duration-segment.duration-start.duration-end{margin-left:0;margin-right:0;border-radius:6px}
+.duration-continuation{display:block;min-height:30px}
+.calendar-day{overflow:visible}
+.day-tasks{position:relative}

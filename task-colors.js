@@ -8,7 +8,7 @@ const taskWorkflowColors={
   'ON HOLD':'#9298a2'
 };
 function stableTaskColor(value,palette){let hash=0;for(const character of String(value||''))hash=(hash*31+character.charCodeAt(0))>>>0;return palette[hash%palette.length]}
-function decorateTaskColors(root=document){root.querySelectorAll('select[data-task-field]').forEach(select=>{const field=select.dataset.taskField,value=select.value;let color='';if(field==='category')color=taskCategoryColor(value);else if(field==='operator')color=stableTaskColor(value,taskOperatorPalette);else if(field==='status'||field==='implementationStatus')color=taskWorkflowColors[value]||'#9298a2';if(color){select.style.setProperty('--field-color',color);select.classList.add('task-coded-select')}})}
+function decorateTaskColors(root=document){root.querySelectorAll('select[data-task-field]').forEach(select=>{const field=select.dataset.taskField,value=select.value;let color='';if(field==='category')color=taskCategoryColor(value);else if(field==='operator')color=value==='CRAIG'?'#4da3ff':value==='PEDRO'?'#f2c94c':stableTaskColor(value,taskOperatorPalette);else if(field==='status'||field==='implementationStatus')color=taskWorkflowColors[value]||'#9298a2';if(color){select.style.setProperty('--field-color',color);select.classList.add('task-coded-select')}})}
 const renderOngoingBeforeColors=renderOngoing;
 renderOngoing=function(){renderOngoingBeforeColors();decorateTaskColors($('ongoingGrid'))};
 const renderFinishedBeforeColors=renderFinished;
