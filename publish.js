@@ -33,13 +33,14 @@ function extensionFor(type){return({"image/gif":"gif","image/png":"png","image/j
 async function createPublishSnapshot(){
   const button=$('publishBtn');button.classList.add('publish-working');button.textContent='PACKAGING…';
   try{
-    const database=structuredClone({schemaVersion:4,characters:state.characters,modifiers:state.modifiers,npcs:state.npcs}),publishedParasytes=structuredClone(parasytes),publishedPlanner=structuredClone(planner),publishedRoster=structuredClone(rosterView),entries=[],used=new Map();
+    const database=structuredClone({schemaVersion:5,characters:state.characters,modifiers:state.modifiers,npcs:state.npcs}),publishedParasites=structuredClone(parasytes),publishedAchievements=structuredClone(achievements),publishedPlanner=structuredClone(planner),publishedRoster=structuredClone(rosterView),entries=[],used=new Map();
     const extract=async(value,label)=>{if(typeof value!=='string'||!value.startsWith('data:'))return value;const blob=await fetch(value).then(r=>r.blob()),base=safeName(label),count=used.get(base)||0;used.set(base,count+1);const name=`snapshot-assets/${base}${count?`-${count+1}`:''}.${extensionFor(blob.type)}`;entries.push({name,data:blob});return name};
     for(const c of database.characters){c.mainGif=await extract(c.mainGif,`${c.fileName}-360`);c.petImage=await extract(c.petImage,`${c.fileName}-spawn`);for(const [i,v] of (c.variants||[]).entries())v.gif=await extract(v.gif,`${c.fileName}-${v.name||`variant-${i+1}`}`)}
     for(const m of database.modifiers)m.iconData=await extract(m.iconData,`modifier-${m.name}`);
     for(const n of database.npcs)n.image=await extract(n.image,`npc-${n.name}`);
-    for(const p of publishedParasytes)p.gif=await extract(p.gif,`parasyte-${p.level}-${p.family}`);
-    const snapshot={publishedAt:new Date().toISOString(),readOnly:true,database,parasytes:publishedParasytes,planner:publishedPlanner,rosterView:publishedRoster};
+    for(const p of publishedParasites)p.gif=await extract(p.gif,`parasyte-${p.level}-${p.family}`);
+    for(const achievement of publishedAchievements){achievement.unlockedIcon=await extract(achievement.unlockedIcon,`${achievement.apiName}-unlocked`);achievement.lockedIcon=await extract(achievement.lockedIcon,`${achievement.apiName}-locked`)}
+    const snapshot={publishedAt:new Date().toISOString(),readOnly:true,database,parasytes:publishedParasites,achievements:publishedAchievements,planner:publishedPlanner,rosterView:publishedRoster};
     entries.unshift({name:'snapshot-data.js',data:new Blob([`window.SKINATOR_PUBLISHED_SNAPSHOT=${JSON.stringify(snapshot)};\n`],{type:'text/javascript'})},{name:'.nojekyll',data:new Blob([''])},{name:'HOW-TO-PUBLISH.txt',data:new Blob(['SKINATOR PUBLISH SNAPSHOT\r\n\r\n1. Copy the complete skinator-tracker application folder into your GitHub repository.\r\n2. Extract this ZIP into that copied folder and replace snapshot-data.js.\r\n3. Commit and push with GitHub Desktop.\r\n4. Enable GitHub Pages from the main branch and root folder.\r\n\r\nThe published website will be read-only. Generate and extract a new snapshot whenever you want to update it.\r\n'])});
     const zip=await makeZip(entries),url=URL.createObjectURL(zip),a=document.createElement('a');a.href=url;a.download=`skinator-publish-snapshot-${new Date().toISOString().slice(0,10)}.zip`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);toast('PUBLISH SNAPSHOT READY');
   }catch(error){console.error(error);toast('PUBLISH SNAPSHOT FAILED')}

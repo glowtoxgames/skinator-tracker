@@ -1,4 +1,4 @@
-const PARASYTE_SEED=[
+const PARASITE_SEED=[
 ['Speed Parasite',[['Lesser','Increases part speed by 1'],['Mature','Increases part speed by 2'],['Evolved','Increases part speed by 3'],['Apex','Increases part speed by 4']]],
 ['Part health Parasite',[['Lesser','Adds 1 max health to the part up to 6'],['Mature','Adds 2 max health to the part up to 6'],['Evolved','Adds 3 max health to the part up to 6'],['Apex','Adds 4 max health to the part up to 6']]],
 ['Damage Parasite',[['Lesser','Increases part damage by 1'],['Mature','Increases part damage by 2'],['Evolved','Increases part damage by 3'],['Apex','Increases part damage by 4']]],
