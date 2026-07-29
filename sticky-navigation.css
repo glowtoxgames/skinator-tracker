@@ -29,15 +29,11 @@ main>header{
   max-height:calc(100vh - var(--sticky-page-header-height) - 12px);
 }
 #trackerView .calendar-head{
-  position:sticky;
-  top:var(--sticky-page-header-height);
-  z-index:55;
+  position:static;
   background:#0e1013;
 }
 #trackerView .weekday-row{
-  position:sticky;
-  top:calc(var(--sticky-page-header-height) + 68px);
-  z-index:54;
+  position:static;
   background:#0e1013;
 }
 @media(max-width:900px){

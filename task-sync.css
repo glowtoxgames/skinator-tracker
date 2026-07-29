@@ -1,5 +1,5 @@
-.shared-completion{color:transparent}
-.shared-completion[aria-pressed="true"]{color:#70dc96;border-color:#348454;background:#173321}
+.tracker-completion{color:transparent}
+.tracker-completion[aria-pressed="true"]{color:#70dc96;border-color:#348454;background:#173321}
 .planner-task.operator-craig{border-left-color:#4da3ff;background:linear-gradient(90deg,rgba(77,163,255,.16),#191b20 45%)}
 .planner-task.operator-pedro{border-left-color:#f2c94c;background:linear-gradient(90deg,rgba(242,201,76,.16),#191b20 45%)}
 .duration-segment{position:relative;z-index:2;min-height:48px;border-radius:0}
@@ -10,3 +10,14 @@
 .duration-continuation{display:block;min-height:30px}
 .calendar-day{overflow:visible}
 .day-tasks{position:relative}
+.backlog-sort{width:100%;height:34px;margin:8px 0 2px;font-size:9px}
+.task-calendar-menu{position:fixed;z-index:10000;min-width:180px;padding:6px;background:#111318;border:1px solid #3c414b;border-radius:8px;box-shadow:0 14px 38px rgba(0,0,0,.58)}
+.task-calendar-menu[hidden]{display:none}
+.task-calendar-menu [hidden]{display:none}
+.task-calendar-menu button,.task-calendar-menu span{display:block;width:100%;padding:10px 12px;border:0;border-radius:5px;text-align:left;font-family:inherit;font-size:10px;font-weight:700;line-height:1.2;letter-spacing:.08em}
+.task-calendar-menu button{color:#f4f5f7;background:#242832;cursor:pointer}
+.task-calendar-menu button:hover{color:#fff;background:#b51f30}
+.task-calendar-menu span{color:#777d87;background:#181b21}
+.task-line.scheduled-task-row{border-right:3px solid #d72b3f;cursor:context-menu}
+.calendar-day.calendar-task-focus{z-index:8;animation:calendar-task-focus 2.2s ease both}
+@keyframes calendar-task-focus{0%,100%{box-shadow:none}15%,70%{box-shadow:inset 0 0 0 2px #ff4055,0 0 28px rgba(255,48,70,.55);background:rgba(124,20,34,.36)}}
