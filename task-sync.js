@@ -184,6 +184,11 @@ backlogSortControl.innerHTML='<option value="created-desc">DATE CREATED // NEWES
 backlogSortControl.value=localStorage.getItem(TRACKER_BACKLOG_SORT_KEY)||'created-desc';
 $('taskBacklog').querySelector(':scope > p').insertAdjacentElement('afterend',backlogSortControl);
 
+const calendarSelectedTaskIds=new Set();
+const calendarUndoStack=[];
+let calendarSelectionMode=false;
+$('todayMonth').insertAdjacentHTML('beforebegin','<div class="calendar-bulk-actions"><button type="button" class="mini" id="calendarSelectMode" aria-pressed="false" title="Select individual tasks or every task starting on a day">SELECT TASKS</button><button type="button" class="mini" id="calendarClearSelection" title="Clear the current task selection" hidden>CLEAR</button><button type="button" class="mini" id="calendarUndo" title="Undo the last calendar move or task deletion" disabled>UNDO</button></div>');
+
 function sortTrackerBacklog(tasks){
   const mode=backlogSortControl.value;
   return [...tasks].sort((left,right)=>{
@@ -198,6 +203,8 @@ function sortTrackerBacklog(tasks){
 
 renderTracker=function(){
   const tasks=plannerTasks(),open=tasks.filter(task=>!task.complete),done=tasks.filter(task=>task.complete);
+  const scheduledIds=new Set(tasks.filter(task=>scheduledDateForPlannerTask(task)).map(task=>task.id));
+  [...calendarSelectedTaskIds].forEach(id=>{if(!scheduledIds.has(id))calendarSelectedTaskIds.delete(id)});
   const backlog=sortTrackerBacklog(open.filter(task=>!scheduledDateForPlannerTask(task)));
   $('navTaskCount').textContent=open.length;
   $('trackerOpen').textContent=open.length;
@@ -206,6 +213,7 @@ renderTracker=function(){
   $('backlogTasks').innerHTML=backlog.map(task=>taskCard(task)).join('')||'<div class="backlog-empty">ALL OPEN WORK IS SCHEDULED</div>';
   renderCalendar(tasks);
   bindTaskInteractions();
+  updateCalendarSelectionUi();
 };
 backlogSortControl.onchange=()=>{
   localStorage.setItem(TRACKER_BACKLOG_SORT_KEY,backlogSortControl.value);
@@ -224,10 +232,108 @@ function plannerDateDifference(startIso,currentIso){
   const [sy,sm,sd]=startIso.split('-').map(Number),[cy,cm,cd]=currentIso.split('-').map(Number);
   return Math.round((Date.UTC(cy,cm-1,cd)-Date.UTC(sy,sm-1,sd))/86400000);
 }
+function plannerDateAdd(iso,days){
+  const [year,month,date]=iso.split('-').map(Number),value=new Date(Date.UTC(year,month-1,date+days));
+  return value.toISOString().slice(0,10);
+}
+function plannerTaskById(id){return plannerTasks().find(task=>task.id===id)}
+function plannerTaskDate(id){
+  const task=plannerTaskById(id);
+  return task?scheduledDateForPlannerTask(task):planner.schedule?.[id]||'';
+}
+function setPlannerTaskDate(id,date){
+  const task=plannerTaskById(id);
+  plannerTaskScheduleKeys(task||{id}).forEach(key=>delete planner.schedule[key]);
+  if(date)planner.schedule[id]=date;
+}
+function capturePlannerDates(ids){
+  return Object.fromEntries([...new Set(ids)].map(id=>[id,plannerTaskDate(id)||null]));
+}
+function samePlannerDates(expected){
+  return Object.entries(expected).every(([id,date])=>(plannerTaskDate(id)||null)===date);
+}
+function pushCalendarUndo(action){
+  calendarUndoStack.push(action);
+  if(calendarUndoStack.length>20)calendarUndoStack.shift();
+  updateCalendarSelectionUi();
+}
+function selectedTasksForDate(date){
+  return plannerTasks().filter(task=>scheduledDateForPlannerTask(task)===date).map(task=>task.id);
+}
+function updateCalendarSelectionUi(){
+  const view=$('trackerView'),selectButton=$('calendarSelectMode'),clearButton=$('calendarClearSelection'),undoButton=$('calendarUndo');
+  view.classList.toggle('calendar-selection-active',calendarSelectionMode);
+  selectButton.classList.toggle('active',calendarSelectionMode);
+  selectButton.setAttribute('aria-pressed',String(calendarSelectionMode));
+  selectButton.textContent=calendarSelectionMode?'DONE SELECTING':'SELECT TASKS';
+  clearButton.hidden=!calendarSelectedTaskIds.size;
+  clearButton.textContent=`CLEAR (${calendarSelectedTaskIds.size})`;
+  undoButton.disabled=!calendarUndoStack.length;
+  undoButton.textContent=calendarUndoStack.length?`UNDO ${calendarUndoStack[calendarUndoStack.length-1].shortLabel}`:'UNDO';
+  $('calendarGrid').querySelectorAll('.planner-task[data-task-id]').forEach(card=>card.classList.toggle('calendar-selected',calendarSelectedTaskIds.has(card.dataset.taskId)));
+  $('calendarGrid').querySelectorAll('[data-select-calendar-day]').forEach(button=>{
+    const ids=selectedTasksForDate(button.dataset.selectCalendarDay),allSelected=ids.length&&ids.every(id=>calendarSelectedTaskIds.has(id));
+    button.classList.toggle('active',!!allSelected);
+    button.textContent=allSelected?'✓ ALL':'ALL';
+    button.disabled=!ids.length;
+  });
+}
+function draggedCalendarTaskIds(dataTransfer){
+  try{
+    const ids=JSON.parse(dataTransfer.getData('application/x-skinator-task-group')||'[]');
+    if(Array.isArray(ids)&&ids.length)return [...new Set(ids.map(String))];
+  }catch{}
+  const id=dataTransfer.getData('text/plain');
+  return id?[id]:[];
+}
+function moveCalendarTasks(ids,targetDate){
+  const unique=[...new Set(ids)],before=capturePlannerDates(unique),scheduled=unique.map(id=>before[id]).filter(Boolean);
+  if(!unique.length)return;
+  const anchor=scheduled.length?[...scheduled].sort()[0]:targetDate,delta=plannerDateDifference(anchor,targetDate);
+  unique.forEach(id=>setPlannerTaskDate(id,before[id]?plannerDateAdd(before[id],delta):targetDate));
+  const after=capturePlannerDates(unique),count=unique.length;
+  if(samePlannerDates(before)){renderTracker();return}
+  pushCalendarUndo({type:'schedule',shortLabel:count>1?`${count} TASKS`:'MOVE',label:count>1?`MOVE ${count} TASKS`:'MOVE TASK',before,after});
+  savePlanner();
+  renderTracker();
+  toast(count>1?`${count} TASKS MOVED TOGETHER`:'TASK MOVED');
+}
+function unscheduleCalendarTasks(ids){
+  const unique=[...new Set(ids)].filter(id=>plannerTaskDate(id));
+  if(!unique.length)return;
+  const before=capturePlannerDates(unique);
+  unique.forEach(id=>setPlannerTaskDate(id,''));
+  const after=capturePlannerDates(unique),count=unique.length;
+  unique.forEach(id=>calendarSelectedTaskIds.delete(id));
+  pushCalendarUndo({type:'schedule',shortLabel:count>1?`${count} TASKS`:'REMOVE',label:count>1?`REMOVE ${count} TASKS FROM CALENDAR`:'REMOVE TASK FROM CALENDAR',before,after});
+  savePlanner();
+  renderTracker();
+  toast(count>1?`${count} TASKS RETURNED TO BACKLOG`:'TASK RETURNED TO BACKLOG');
+}
+function undoCalendarAction(){
+  const action=calendarUndoStack[calendarUndoStack.length-1];
+  if(!action)return;
+  if(action.type==='schedule'){
+    if(!samePlannerDates(action.after)||Object.keys(action.after).some(id=>!plannerTaskById(id))){toast('UNDO BLOCKED // CALENDAR CHANGED SINCE THAT ACTION');return}
+    Object.entries(action.before).forEach(([id,date])=>setPlannerTaskDate(id,date));
+    savePlanner();
+  }else if(action.type==='task-delete'){
+    if(ongoingTaskRecords.some(record=>record.id===action.record.id)){toast('UNDO BLOCKED // TASK ALREADY EXISTS');return}
+    ongoingTaskRecords.splice(Math.min(action.index,ongoingTaskRecords.length),0,cloneTaskData(action.record));
+    if(action.date)setPlannerTaskDate(sharedPlannerTaskId(action.record),action.date);
+    saveBusiness();
+    savePlanner();
+    renderOngoing();
+    renderFinished();
+  }
+  calendarUndoStack.pop();
+  renderTracker();
+  toast(`${action.label} UNDONE`);
+}
 function durationTaskCard(task,offset,weekday){
   const days=Math.max(1,Number(task.days)||1),weekStart=weekday===0,weekEnd=weekday===6;
   const visualStart=offset===0||weekStart,visualEnd=offset===days-1||weekEnd;
-  const classes=['planner-task','compact','duration-segment',task.complete?'done':'',taskOperatorClass(task),visualStart?'duration-start':'duration-middle',visualEnd?'duration-end':''].filter(Boolean).join(' ');
+  const classes=['planner-task','compact','duration-segment',task.complete?'done':'',calendarSelectedTaskIds.has(task.id)?'calendar-selected':'',taskOperatorClass(task),visualStart?'duration-start':'duration-middle',visualEnd?'duration-end':''].filter(Boolean).join(' ');
   return `<article class="${classes}" draggable="true" data-task-id="${task.id}" ${task.sharedTask?`data-shared-record-id="${task.recordId}"`:''}>${visualStart?taskCardContent(task):'<span class="duration-continuation" aria-hidden="true">&nbsp;</span>'}</article>`;
 }
 
@@ -243,7 +349,7 @@ renderCalendar=function(tasks){
     const active=tasks.map(task=>{const scheduledDate=scheduledDateForPlannerTask(task);return{task,scheduledDate,offset:scheduledDate?plannerDateDifference(scheduledDate,iso):-1}})
       .filter(item=>item.offset>=0&&item.offset<Math.max(1,Number(item.task.days)||1))
       .sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)||String(a.task.id).localeCompare(String(b.task.id)));
-    html+=`<div class="calendar-day ${outside?'outside':''} ${iso===today?'today':''}" data-date="${iso}"><div class="day-number"><span>${date.getDate()}</span>${iso===today?'<em>TODAY</em>':''}</div><div class="day-tasks">${active.map(item=>durationTaskCard(item.task,item.offset,weekday)).join('')}</div></div>`;
+    html+=`<div class="calendar-day ${outside?'outside':''} ${iso===today?'today':''}" data-date="${iso}"><div class="day-number"><span>${date.getDate()}</span>${iso===today?'<em>TODAY</em>':''}<button type="button" class="day-select-toggle" data-select-calendar-day="${iso}" title="Select every task that starts on this date">ALL</button></div><div class="day-tasks">${active.map(item=>durationTaskCard(item.task,item.offset,weekday)).join('')}</div></div>`;
   }
   $('calendarGrid').innerHTML=html;
 };
@@ -251,26 +357,26 @@ renderCalendar=function(tasks){
 const bindSharedTaskInteractions=bindTaskInteractions;
 bindTaskInteractions=function(){
   bindSharedTaskInteractions();
+  document.querySelectorAll('#calendarGrid .planner-task[data-task-id]').forEach(card=>card.ondragstart=event=>{
+    const id=card.dataset.taskId;
+    if(calendarSelectionMode){
+      if(!calendarSelectedTaskIds.has(id)){calendarSelectedTaskIds.clear();calendarSelectedTaskIds.add(id)}
+      event.dataTransfer.setData('application/x-skinator-task-group',JSON.stringify([...calendarSelectedTaskIds]));
+    }
+    event.dataTransfer.setData('text/plain',id);
+    event.dataTransfer.effectAllowed='move';
+    updateCalendarSelectionUi();
+  });
   document.querySelectorAll('.calendar-day').forEach(day=>day.ondrop=event=>{
     event.preventDefault();
     day.classList.remove('drag-over');
-    const id=event.dataTransfer.getData('text/plain');
-    if(!id)return;
-    const task=plannerTasks().find(item=>item.id===id);
-    plannerTaskScheduleKeys(task||{id}).filter(key=>key!==id).forEach(key=>delete planner.schedule[key]);
-    planner.schedule[id]=day.dataset.date;
-    document.querySelector(`#backlogTasks .planner-task[data-task-id="${CSS.escape(id)}"]`)?.remove();
-    savePlanner();
-    renderTracker();
+    const ids=draggedCalendarTaskIds(event.dataTransfer);
+    if(ids.length)moveCalendarTasks(ids,day.dataset.date);
   });
   $('taskBacklog').ondrop=event=>{
     event.preventDefault();
-    const id=event.dataTransfer.getData('text/plain');
-    if(!id)return;
-    const task=plannerTasks().find(item=>item.id===id);
-    plannerTaskScheduleKeys(task||{id}).forEach(key=>delete planner.schedule[key]);
-    savePlanner();
-    renderTracker();
+    const ids=draggedCalendarTaskIds(event.dataTransfer);
+    if(ids.length)unscheduleCalendarTasks(ids);
   };
   document.querySelectorAll('.planner-task[data-shared-record-id]').forEach(card=>card.onclick=event=>{
     if(event.target.closest('button'))return;
@@ -304,6 +410,46 @@ bindTaskInteractions=function(){
     renderTracker();
   });
 };
+
+$('calendarSelectMode').onclick=()=>{
+  calendarSelectionMode=!calendarSelectionMode;
+  if(!calendarSelectionMode)calendarSelectedTaskIds.clear();
+  renderTracker();
+};
+$('calendarClearSelection').onclick=()=>{
+  calendarSelectedTaskIds.clear();
+  updateCalendarSelectionUi();
+};
+$('calendarUndo').onclick=undoCalendarAction;
+$('calendarGrid').addEventListener('click',event=>{
+  const dayButton=event.target.closest('[data-select-calendar-day]');
+  if(dayButton){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    calendarSelectionMode=true;
+    const ids=selectedTasksForDate(dayButton.dataset.selectCalendarDay);
+    const allSelected=ids.length&&ids.every(id=>calendarSelectedTaskIds.has(id));
+    ids.forEach(id=>allSelected?calendarSelectedTaskIds.delete(id):calendarSelectedTaskIds.add(id));
+    updateCalendarSelectionUi();
+    return;
+  }
+  const card=event.target.closest('.planner-task[data-task-id]');
+  if(!card||event.target.closest('button'))return;
+  if(!calendarSelectionMode&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  calendarSelectionMode=true;
+  const id=card.dataset.taskId;
+  if(calendarSelectedTaskIds.has(id))calendarSelectedTaskIds.delete(id);
+  else calendarSelectedTaskIds.add(id);
+  updateCalendarSelectionUi();
+},true);
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||!calendarSelectionMode)return;
+  calendarSelectionMode=false;
+  calendarSelectedTaskIds.clear();
+  updateCalendarSelectionUi();
+});
 
 const ongoingCalendarMenu=document.createElement('div');
 ongoingCalendarMenu.id='ongoingCalendarMenu';
@@ -467,13 +613,24 @@ $('businessForm').addEventListener('submit',()=>setTimeout(()=>{
 },0));
 $('businessDelete').addEventListener('click',()=>{
   const record=businessEditing?.type==='task'?ongoingTaskRecords.find(task=>task.id===businessEditing.id):null;
-  const scheduleKeys=record?plannerTaskScheduleKeys(plannerTaskForRecord(record)):[];
+  if(!record)return;
+  const deletion={
+    type:'task-delete',
+    shortLabel:'DELETE',
+    label:'DELETE TASK',
+    record:cloneTaskData(record),
+    index:ongoingTaskRecords.indexOf(record),
+    date:plannerTaskDate(sharedPlannerTaskId(record))||null,
+    scheduleKeys:plannerTaskScheduleKeys(plannerTaskForRecord(record))
+  };
   setTimeout(()=>{
-    scheduleKeys.forEach(key=>delete planner.schedule[key]);
-    if(scheduleKeys.length)savePlanner();
+    if(ongoingTaskRecords.some(task=>task.id===deletion.record.id))return;
+    deletion.scheduleKeys.forEach(key=>delete planner.schedule[key]);
+    pushCalendarUndo(deletion);
+    savePlanner();
     renderTracker();
   },0);
-});
+},true);
 document.addEventListener('change',event=>{
   if(!event.target.matches('select[data-task-field]'))return;
   const record=ongoingTaskRecords.find(task=>task.id===event.target.dataset.id);

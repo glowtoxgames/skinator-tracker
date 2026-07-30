@@ -21,3 +21,19 @@
 .task-line.scheduled-task-row{border-right:3px solid #d72b3f;cursor:context-menu}
 .calendar-day.calendar-task-focus{z-index:8;animation:calendar-task-focus 2.2s ease both}
 @keyframes calendar-task-focus{0%,100%{box-shadow:none}15%,70%{box-shadow:inset 0 0 0 2px #ff4055,0 0 28px rgba(255,48,70,.55);background:rgba(124,20,34,.36)}}
+.calendar-bulk-actions{display:flex;gap:6px;margin-left:auto}
+.calendar-bulk-actions+.today-button{margin-left:0}
+.calendar-bulk-actions .mini{white-space:nowrap}
+#calendarSelectMode.active{color:#fff;border-color:#d43b4b;background:#4b1820}
+#calendarUndo:disabled{opacity:.35;cursor:not-allowed}
+.day-select-toggle{display:none;margin-left:auto;border:1px solid #4b5059;background:#181b20;color:#888;border-radius:4px;padding:2px 5px;font:700 6px inherit;cursor:pointer}
+.day-select-toggle:disabled{opacity:.28;cursor:not-allowed}
+.calendar-selection-active .day-select-toggle{display:block}
+.day-select-toggle.active{color:#fff;border-color:#d43b4b;background:#5a1b24}
+.planner-task.calendar-selected{outline:2px solid #53a7ff;outline-offset:1px;box-shadow:0 0 0 3px rgba(83,167,255,.18),0 8px 20px rgba(0,0,0,.45)}
+.calendar-selection-active .planner-task{cursor:pointer}
+.calendar-selection-active .planner-task.calendar-selected{cursor:grab}
+@media(max-width:900px){
+  .calendar-head{height:auto;min-height:68px;flex-wrap:wrap;padding-block:10px}
+  .calendar-bulk-actions{order:5;width:100%;margin-left:0}
+}
