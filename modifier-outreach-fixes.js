@@ -133,10 +133,19 @@ nodeZoomStyles.textContent=`
   #npcGrid .npc-info p{font-size:calc(9px * var(--node-zoom,1))}
   #npcGrid .npc-progress span{font-size:calc(7px * var(--node-zoom,1))}
   #npcGrid .npc-progress b{font-size:calc(18px * var(--node-zoom,1))}
-  #parasyteFamilies .parasyte-grid{grid-template-columns:repeat(auto-fit,minmax(calc(190px * var(--node-zoom,1)),1fr));gap:calc(11px * var(--node-zoom,1))}
+  #parasyteFamilies{padding:calc(18px * var(--node-zoom,1));gap:calc(24px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-family{border-radius:calc(14px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-grid{padding:calc(14px * var(--node-zoom,1));grid-template-columns:repeat(auto-fit,minmax(calc(190px * var(--node-zoom,1)),calc(320px * var(--node-zoom,1))));gap:calc(11px * var(--node-zoom,1));justify-content:start}
+  #parasyteFamilies .parasyte-card{border-radius:calc(12px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-card:hover{transform:translateY(calc(-3px * var(--node-zoom,1)))}
   #parasyteFamilies .parasyte-info{padding:calc(13px * var(--node-zoom,1))}
-  #parasyteFamilies .parasyte-info h3{font-size:calc(17px * var(--node-zoom,1))}
-  #parasyteFamilies .parasyte-info p{font-size:calc(11px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-info h3{margin-bottom:calc(7px * var(--node-zoom,1));font-size:calc(17px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-info p{min-height:calc(43px * var(--node-zoom,1));font-size:calc(11px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-info>span{margin-top:calc(10px * var(--node-zoom,1));padding-top:calc(9px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-visual>b,#parasyteFamilies .parasyte-status{padding:calc(6px * var(--node-zoom,1)) calc(8px * var(--node-zoom,1));border-radius:calc(6px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-visual>b{left:calc(9px * var(--node-zoom,1));bottom:calc(9px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-status{right:calc(9px * var(--node-zoom,1));top:calc(9px * var(--node-zoom,1))}
+  #parasyteFamilies .parasyte-placeholder{font-size:calc(54px * var(--node-zoom,1))}
   #parasyteFamilies .parasyte-info>span,#parasyteFamilies .parasyte-visual>b,#parasyteFamilies .parasyte-status{font-size:calc(9px * var(--node-zoom,1))}
   #modifierGrid{grid-template-columns:repeat(auto-fill,minmax(calc(285px * var(--node-zoom,1)),1fr));gap:calc(9px * var(--node-zoom,1))}
   #modifierGrid .mod-card{grid-template-columns:calc(62px * var(--node-zoom,1)) 1fr auto;gap:calc(12px * var(--node-zoom,1));padding:calc(14px * var(--node-zoom,1));min-height:calc(142px * var(--node-zoom,1))}
@@ -145,7 +154,7 @@ nodeZoomStyles.textContent=`
   #modifierGrid .mod-card p{font-size:calc(8px * var(--node-zoom,1))}
   #modifierGrid .mod-meta{font-size:calc(7px * var(--node-zoom,1))}
   #modifierGrid .grade-icon{width:calc(34px * var(--node-zoom,1));height:calc(34px * var(--node-zoom,1))}
-  @media(max-width:700px){.node-zoom-control{width:100%;margin-left:0;justify-content:flex-end}.node-zoom-control input{flex:1;max-width:180px}}
+  @media(max-width:700px){.node-zoom-control{width:100%;margin-left:0;justify-content:flex-end}.node-zoom-control input{flex:1;max-width:180px}#parasyteFamilies .parasyte-grid{grid-template-columns:1fr}}
 `;
 document.head.appendChild(nodeZoomStyles);
 
