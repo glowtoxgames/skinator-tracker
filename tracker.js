@@ -13,18 +13,80 @@ document.querySelector('main').insertAdjacentHTML('beforeend',`<section id="trac
   <form id="customTaskForm" class="custom-task-form" hidden><div><small>NEW CUSTOM TASK</small><h2>Add to backlog</h2></div><label>TASK NAME *<input id="customTaskTitle" required placeholder="e.g. Polish Graveyard lighting"></label><label>TYPE<select id="customTaskType"><option>Art</option><option>Design</option><option>Code</option><option>Audio</option><option>Marketing</option><option>Other</option></select></label><label>ESTIMATED DAYS<input id="customTaskDays" type="number" min="1" max="365" value="1"></label><button class="btn ghost" type="button" id="cancelCustomTask">CANCEL</button><button class="btn red" type="submit">CREATE TASK</button></form>
 </section>`);
 document.querySelector('main').insertAdjacentHTML('beforeend',`<section id="parasytesView" hidden><div class="stats"><article><label>PARASITE NODES</label><b id="parasyteCount">42</b><small>ALL LEVELS</small></article><article><label>COMPLETE FAMILIES</label><b id="parasyteFamilyComplete">0/12</b><small>EVERY LEVEL COMPLETE</small></article><article><label>COMPLETE PARASITES</label><b id="parasyteCompleteCount">0/42</b><small>GIF + DESCRIPTION + IN GAME</small></article><article><label>WITH GIF</label><b id="parasyteGifCount">0</b><small>500 × 500 ASSETS</small></article></div><section class="panel"><div class="toolbar"><label class="search">⌕ <input id="parasyteSearch" placeholder="SEARCH PARASITES"></label><span id="parasyteResultCount"></span></div><div id="parasyteFamilies" class="parasyte-families"></div></section></section>`);
-document.body.insertAdjacentHTML('beforeend',`<dialog id="parasyteDialog"><form id="parasyteForm"><div class="dialog-head"><div><p>PARASITE DATABASE</p><h2 id="parasyteDialogTitle"></h2></div><button type="button" class="x" id="closeParasite">×</button></div><div class="dialog-body"><div class="parasyte-editor"><label class="parasyte-upload drop-target" id="parasyteGifDrop"><input id="parasyteGifInput" type="file" accept="image/gif" hidden><img id="parasyteGifPreview" hidden><span id="parasyteGifPrompt">＋ CLICK OR DROP<br>500 × 500 GIF</span></label><div><label>FAMILY<input id="parasyteFamily" readonly></label><label>LEVEL<input id="parasyteLevel" readonly></label><label>DESCRIPTION<textarea id="parasyteDescription" rows="5"></textarea></label><label>ESTIMATED DAYS TO FINISH<input id="parasyteEstimatedDays" type="number" min="1" max="365" value="1"></label><label class="parasyte-implemented"><span>GAME STATUS</span><span class="check-row"><input id="parasyteImplemented" type="checkbox"> IMPLEMENTED INTO THE GAME</span></label><button type="button" class="remove" id="removeParasiteGif">REMOVE GIF</button></div></div></div><div class="dialog-actions"><span></span><span></span><button type="button" class="btn ghost" id="cancelParasite">CANCEL</button><button class="btn red" type="submit">SAVE PARASITE</button></div></form></dialog>`);
+document.body.insertAdjacentHTML('beforeend',`<dialog id="parasyteDialog"><form id="parasyteForm"><div class="dialog-head"><div><p>PARASITE DATABASE</p><h2 id="parasyteDialogTitle"></h2></div><button type="button" class="x" id="closeParasite">×</button></div><div class="dialog-body"><div class="parasyte-editor"><label class="parasyte-upload drop-target" id="parasyteGifDrop"><input id="parasyteGifInput" type="file" accept="image/gif" hidden><img id="parasyteGifPreview" hidden><span id="parasyteGifPrompt">＋ CLICK OR DROP<br>500 × 500 GIF</span></label><div><label>FAMILY *<input id="parasyteFamily" list="parasyteFamilyOptions" required placeholder="PARASITE FAMILY"><datalist id="parasyteFamilyOptions"></datalist></label><label>LEVEL *<select id="parasyteLevel" required><option>Lesser</option><option>Mature</option><option>Evolved</option><option>Apex</option></select></label><label>DESCRIPTION<textarea id="parasyteDescription" rows="5"></textarea></label><label>ESTIMATED DAYS TO FINISH<input id="parasyteEstimatedDays" type="number" min="1" max="365" value="1"></label><label class="parasyte-implemented"><span>GAME STATUS</span><span class="check-row"><input id="parasyteImplemented" type="checkbox"> IMPLEMENTED INTO THE GAME</span></label><button type="button" class="remove" id="removeParasiteGif">REMOVE GIF</button></div></div></div><div class="dialog-actions"><button type="button" class="btn danger" id="deleteParasite" hidden>DELETE PARASITE</button><span></span><button type="button" class="btn ghost" id="cancelParasite">CANCEL</button><button class="btn red" type="submit">SAVE PARASITE</button></div></form></dialog>`);
 
-let parasytes=(publishedSnapshot?.parasytes||PARASITE_SEED).map(p=>({...p})),editingParasiteId=null,editingParasiteGif='';
+let parasytes=(publishedSnapshot?.parasytes||PARASITE_SEED).map(p=>({...p})),editingParasiteId=null,editingParasiteGif='',deletedParasyteSeedIds=new Set();
 const openParasiteDatabase=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('skinator-parasyte-database',1);request.onupgradeneeded=()=>request.result.createObjectStore('data');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
-async function loadParasites(){if(publishedSnapshot){renderParasites();renderTracker();return}try{const db=await openParasiteDatabase(),saved=await new Promise((resolve,reject)=>{const req=db.transaction('data','readonly').objectStore('data').get('all');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});db.close();if(saved){const byId=new Map(saved.map(p=>[p.id,p]));parasytes=PARASITE_SEED.map(seed=>({...seed,...(byId.get(seed.id)||{})}))}renderParasites();renderTracker()}catch(error){console.error(error);toast('PARASITE STORAGE COULD NOT BE OPENED')}}
-async function saveParasites(){try{const db=await openParasiteDatabase();await new Promise((resolve,reject)=>{const tx=db.transaction('data','readwrite');tx.objectStore('data').put(parasytes,'all');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();window.skinatorCloudSave?.()}catch(error){console.error(error);toast('PARASITE SAVE FAILED')}}
+function mergeSavedParasites(saved){
+  const records=Array.isArray(saved)?saved:Array.isArray(saved?.records)?saved.records:[];
+  deletedParasyteSeedIds=new Set(Array.isArray(saved?.deletedSeedIds)?saved.deletedSeedIds:[]);
+  const byId=new Map(records.map(parasyte=>[parasyte.id,parasyte])),seedIds=new Set(PARASITE_SEED.map(parasyte=>parasyte.id));
+  return[
+    ...PARASITE_SEED.filter(seed=>!deletedParasyteSeedIds.has(seed.id)).map(seed=>({...seed,...(byId.get(seed.id)||{})})),
+    ...records.filter(parasyte=>!seedIds.has(parasyte.id)).map(parasyte=>({...parasyte}))
+  ];
+}
+async function loadParasites(){if(publishedSnapshot){renderParasites();renderTracker();return}try{const db=await openParasiteDatabase(),saved=await new Promise((resolve,reject)=>{const req=db.transaction('data','readonly').objectStore('data').get('all');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});db.close();if(saved)parasytes=mergeSavedParasites(saved);renderParasites();renderTracker()}catch(error){console.error(error);toast('PARASITE STORAGE COULD NOT BE OPENED')}}
+async function saveParasites(){try{const db=await openParasiteDatabase(),saved={records:parasytes,deletedSeedIds:[...deletedParasyteSeedIds]};await new Promise((resolve,reject)=>{const tx=db.transaction('data','readwrite');tx.objectStore('data').put(saved,'all');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();window.skinatorCloudSave?.()}catch(error){console.error(error);toast('PARASITE SAVE FAILED')}}
 const parasyteIsComplete=p=>!!p.gif&&!!p.description?.trim()&&!!p.implemented;
 const PARASYTE_LEVEL_ORDER={Lesser:0,Mature:1,Evolved:2,Apex:3};
 function renderParasites(){const query=($('parasyteSearch')?.value||'').toLowerCase(),filtered=parasytes.filter(p=>`${p.family} ${p.level} ${p.description}`.toLowerCase().includes(query)),families=[...new Set(filtered.map(p=>p.family))],allFamilies=[...new Set(parasytes.map(p=>p.family))],completeCount=parasytes.filter(parasyteIsComplete).length,completeFamilies=allFamilies.filter(family=>parasytes.filter(p=>p.family===family).every(parasyteIsComplete)).length;$('parasyteCount').textContent=parasytes.length;$('navParasiteCount').textContent=parasytes.length;$('parasyteGifCount').textContent=parasytes.filter(p=>p.gif).length;$('parasyteCompleteCount').textContent=`${completeCount}/${parasytes.length}`;$('parasyteFamilyComplete').textContent=`${completeFamilies}/${allFamilies.length}`;$('parasyteResultCount').textContent=plural(filtered.length,'NODE');$('parasyteFamilies').innerHTML=families.map(family=>{const familyNodes=filtered.filter(p=>p.family===family).sort((left,right)=>(PARASYTE_LEVEL_ORDER[left.level]??99)-(PARASYTE_LEVEL_ORDER[right.level]??99)),familyComplete=parasytes.filter(p=>p.family===family).every(parasyteIsComplete);return`<section class="parasyte-family ${familyComplete?'complete-family':''}"><div class="family-heading"><span>PARASITE FAMILY</span><h2>${escapeHtml(family)}</h2><small>${familyComplete?'FAMILY COMPLETE':`${familyNodes.length} LEVELS`}</small></div><div class="parasyte-grid">${familyNodes.map(p=>{const complete=parasyteIsComplete(p);return`<article class="parasyte-card level-${p.level.toLowerCase()} ${complete?'complete':''}" data-id="${p.id}"><div class="parasyte-visual">${p.gif?`<img src="${p.gif}" alt="${escapeHtml(p.family)} ${p.level}">`:'<span class="parasyte-placeholder">◉</span>'}<b>${p.level.toUpperCase()}</b><em class="parasyte-status">${complete?'COMPLETE':'INCOMPLETE'}</em></div><div class="parasyte-info"><h3>${escapeHtml(p.family)}</h3><p>${escapeHtml(p.description)}</p><span>${p.gif?'GIF READY':'GIF MISSING'} // ${p.implemented?'IN GAME':'NOT IN GAME'}</span></div></article>`}).join('')}</div></section>`}).join('');document.querySelectorAll('.parasyte-card').forEach(card=>card.onclick=()=>openParasite(card.dataset.id))}
-function openParasite(id){const p=parasytes.find(x=>x.id===id);if(!p)return;editingParasiteId=id;editingParasiteGif=p.gif||'';$('parasyteDialogTitle').textContent=`${p.level} ${p.family}`;$('parasyteFamily').value=p.family;$('parasyteLevel').value=p.level;$('parasyteDescription').value=p.description;$('parasyteEstimatedDays').value=p.estimatedDays||1;$('parasyteImplemented').checked=!!p.implemented;setPreview('parasyteGifPreview','parasyteGifPrompt',editingParasiteGif);$('removeParasiteGif').hidden=!editingParasiteGif;$('parasyteDialog').showModal()}
+function openParasite(id=null){
+  const p=id?parasytes.find(x=>x.id===id):null;
+  if(id&&!p)return;
+  editingParasiteId=p?.id||null;
+  editingParasiteGif=p?.gif||'';
+  $('parasyteForm').reset();
+  $('parasyteDialogTitle').textContent=p?`${p.level} ${p.family}`:'New Parasite';
+  $('parasyteFamilyOptions').replaceChildren(...[...new Set(parasytes.map(parasyte=>parasyte.family))].sort((left,right)=>left.localeCompare(right)).map(family=>{const option=document.createElement('option');option.value=family;return option}));
+  $('parasyteFamily').value=p?.family||'';
+  $('parasyteLevel').value=p?.level||'Lesser';
+  $('parasyteDescription').value=p?.description||'';
+  $('parasyteEstimatedDays').value=p?.estimatedDays||1;
+  $('parasyteImplemented').checked=!!p?.implemented;
+  $('deleteParasite').hidden=!p;
+  setPreview('parasyteGifPreview','parasyteGifPrompt',editingParasiteGif);
+  $('removeParasiteGif').hidden=!editingParasiteGif;
+  $('parasyteDialog').showModal();
+  if(!p)$('parasyteFamily').focus();
+}
 function acceptParasiteGif(file){if(!file||file.type!=='image/gif')return toast('PARASITE ASSETS MUST BE GIF FILES');fileData(file,data=>{const img=new Image();img.onload=()=>{if(img.naturalWidth!==500||img.naturalHeight!==500)return toast(`INVALID SIZE — ${img.naturalWidth}×${img.naturalHeight}. REQUIRED 500×500`);editingParasiteGif=data;setPreview('parasyteGifPreview','parasyteGifPrompt',data);$('removeParasiteGif').hidden=false};img.src=data})}
-$('parasyteSearch').oninput=renderParasites;$('parasyteGifInput').onchange=e=>acceptParasiteGif(e.target.files[0]);setupDrop($('parasyteGifDrop'),acceptParasiteGif);$('removeParasiteGif').onclick=()=>{editingParasiteGif='';setPreview('parasyteGifPreview','parasyteGifPrompt','');$('removeParasiteGif').hidden=true};$('closeParasite').onclick=$('cancelParasite').onclick=()=>$('parasyteDialog').close();$('parasyteForm').onsubmit=e=>{e.preventDefault();const p=parasytes.find(x=>x.id===editingParasiteId);if(p){p.description=$('parasyteDescription').value.trim();p.gif=editingParasiteGif;p.estimatedDays=+$('parasyteEstimatedDays').value||1;p.implemented=$('parasyteImplemented').checked;saveParasites();renderParasites();renderTracker();$('parasyteDialog').close();toast('PARASITE UPDATED')}};loadParasites();
+$('parasyteSearch').oninput=renderParasites;
+$('parasyteGifInput').onchange=e=>acceptParasiteGif(e.target.files[0]);
+setupDrop($('parasyteGifDrop'),acceptParasiteGif);
+$('removeParasiteGif').onclick=()=>{editingParasiteGif='';setPreview('parasyteGifPreview','parasyteGifPrompt','');$('removeParasiteGif').hidden=true};
+$('closeParasite').onclick=$('cancelParasite').onclick=()=>$('parasyteDialog').close();
+$('deleteParasite').onclick=()=>{
+  const p=parasytes.find(parasyte=>parasyte.id===editingParasiteId);
+  if(!p||!confirm(`Delete ${p.level} ${p.family}?`))return;
+  if(PARASITE_SEED.some(seed=>seed.id===p.id))deletedParasyteSeedIds.add(p.id);
+  parasytes=parasytes.filter(parasyte=>parasyte.id!==p.id);
+  const taskId=`parasyte:${p.id}`;
+  if(planner.schedule)delete planner.schedule[taskId];
+  if(planner.completionOverrides)delete planner.completionOverrides[taskId];
+  savePlanner();
+  saveParasites();
+  renderParasites();
+  renderTracker();
+  $('parasyteDialog').close();
+  toast('PARASITE DELETED');
+};
+$('parasyteForm').onsubmit=e=>{
+  e.preventDefault();
+  const family=$('parasyteFamily').value.trim(),level=$('parasyteLevel').value;
+  if(!family)return toast('PARASITE FAMILY IS REQUIRED');
+  const duplicate=parasytes.some(parasyte=>parasyte.id!==editingParasiteId&&parasyte.family.trim().toLowerCase()===family.toLowerCase()&&parasyte.level===level);
+  if(duplicate)return toast('THAT PARASITE LEVEL ALREADY EXISTS');
+  const now=new Date().toISOString(),existing=parasytes.find(parasyte=>parasyte.id===editingParasiteId),p=existing||{id:crypto.randomUUID(),createdAt:now};
+  Object.assign(p,{family,level,description:$('parasyteDescription').value.trim(),gif:editingParasiteGif,estimatedDays:+$('parasyteEstimatedDays').value||1,implemented:$('parasyteImplemented').checked,updatedAt:now});
+  if(!existing)parasytes.push(p);
+  saveParasites();
+  renderParasites();
+  renderTracker();
+  $('parasyteDialog').close();
+  toast(existing?'PARASITE UPDATED':'PARASITE CREATED');
+};
+loadParasites();
 
 const characterCore=$('bossCharacter').closest('.form-section');characterCore.insertAdjacentHTML('beforeend','<div class="planning-fields"><label>ESTIMATED DAYS TO FINISH<input id="characterEstimatedDays" type="number" min="1" max="365" placeholder="1"></label><label class="boss-check"><span>COMPLETION OVERRIDE</span><span class="check-row"><input id="characterForceComplete" type="checkbox"> FORCE CHARACTER COMPLETE</span></label></div>');
 $('completionFilter').insertAdjacentHTML('afterend','<div class="roster-view-switches"><label><input id="globalVariantNodes" type="checkbox"> DISPLAY VARIANTS</label><label><input id="globalSpawnView" type="checkbox"> DISPLAY SPAWNS</label></div>');
@@ -48,7 +110,38 @@ function shiftMonth(delta){const [y,m]=planner.month.split('-').map(Number),d=ne
 $('prevMonth').onclick=()=>shiftMonth(-1);$('nextMonth').onclick=()=>shiftMonth(1);$('todayMonth').onclick=()=>{planner.month=new Date().toISOString().slice(0,7);savePlanner();renderTracker()};
 function showCustomForm(){$('customTaskForm').hidden=false;$('customTaskTitle').focus();$('customTaskForm').scrollIntoView({behavior:'smooth',block:'center'})}$('inlineNewTask').onclick=showCustomForm;$('cancelCustomTask').onclick=()=>$('customTaskForm').hidden=true;$('customTaskForm').onsubmit=e=>{e.preventDefault();planner.customTasks.push({id:`custom:${crypto.randomUUID()}`,title:$('customTaskTitle').value.trim(),type:$('customTaskType').value,source:$('customTaskType').value,days:+$('customTaskDays').value||1,complete:false});savePlanner();e.currentTarget.reset();$('customTaskDays').value=1;e.currentTarget.hidden=true;renderTracker();toast('TASK ADDED TO BACKLOG')};
 
-const originalSetTab=setTab,originalCreate=$('createBtn').onclick;setTab=function(tab){$('trackerView').hidden=tab!=='tracker';$('parasytesView').hidden=tab!=='parasytes';$('createBtn').hidden=tab==='parasytes';if(tab==='tracker'||tab==='parasytes'){state.tab=tab;document.querySelectorAll('.nav[data-tab]').forEach(n=>n.classList.toggle('active',n.dataset.tab===tab));$('charactersView').hidden=true;$('modifiersView').hidden=true;$('npcsView').hidden=true;if(tab==='tracker'){$('pageTitle').textContent='Production Tracker';$('breadcrumb').textContent='CALENDAR';$('pageSubtitle').textContent='Schedule incomplete work by day and watch completion sync from every database.';$('createBtn').textContent='＋ NEW TASK';$('createBtn').onclick=showCustomForm;renderTracker()}else{$('pageTitle').textContent='Parasites';$('breadcrumb').textContent='UPGRADE FAMILIES';$('pageSubtitle').textContent='Track every Parasite evolution level and its 500 × 500 game asset.';renderParasites()}}else{$('createBtn').hidden=false;$('createBtn').onclick=originalCreate;originalSetTab(tab)}};
+const originalSetTab=setTab,originalCreate=$('createBtn').onclick;
+setTab=function(tab){
+  $('trackerView').hidden=tab!=='tracker';
+  $('parasytesView').hidden=tab!=='parasytes';
+  if(tab==='tracker'||tab==='parasytes'){
+    state.tab=tab;
+    document.querySelectorAll('.nav[data-tab]').forEach(n=>n.classList.toggle('active',n.dataset.tab===tab));
+    $('charactersView').hidden=true;
+    $('modifiersView').hidden=true;
+    $('npcsView').hidden=true;
+    $('createBtn').hidden=!!publishedSnapshot;
+    if(tab==='tracker'){
+      $('pageTitle').textContent='Production Tracker';
+      $('breadcrumb').textContent='CALENDAR';
+      $('pageSubtitle').textContent='Schedule incomplete work by day and watch completion sync from every database.';
+      $('createBtn').textContent='＋ NEW TASK';
+      $('createBtn').onclick=showCustomForm;
+      renderTracker();
+    }else{
+      $('pageTitle').textContent='Parasites';
+      $('breadcrumb').textContent='UPGRADE FAMILIES';
+      $('pageSubtitle').textContent='Track every Parasite evolution level and its 500 × 500 game asset.';
+      $('createBtn').textContent='＋ NEW PARASITE';
+      $('createBtn').onclick=()=>openParasite();
+      renderParasites();
+    }
+  }else{
+    $('createBtn').hidden=false;
+    $('createBtn').onclick=originalCreate;
+    originalSetTab(tab);
+  }
+};
 document.querySelector('.nav[data-tab="tracker"]').onclick=()=>setTab('tracker');document.querySelector('.nav[data-tab="parasytes"]').onclick=()=>setTab('parasytes');
 function decorateNpcCards(){document.querySelectorAll('.npc-card').forEach(card=>{const n=state.npcs.find(x=>x.id===card.dataset.id),visual=card.querySelector('.npc-visual');if(visual&&!visual.querySelector('.npc-zone-badge'))visual.insertAdjacentHTML('beforeend',`<span class="npc-zone-badge">${escapeHtml((n?.zone||'Graveyard').toUpperCase())}</span>`)})}
 function decorateVariantNodes(){const grid=$('characterGrid');if(!grid)return;grid.querySelectorAll('.variant-node-card').forEach(n=>n.remove());let added=0;state.characters.forEach(c=>{if(!c.showVariantsAsNodes)return;const status=completionFor(c),query=`${c.gameName} ${c.fileName} ${(c.variants||[]).map(v=>v.name).join(' ')}`.toLowerCase();if(!query.includes(state.charQuery)||(state.charZone!=='All'&&(c.zone||'Graveyard')!==state.charZone)||(state.completion!=='All'||false)&&((state.completion==='Complete')!==status.complete))return;(c.variants||[]).filter(v=>v.name||v.gif).forEach((v,index)=>{grid.insertAdjacentHTML('beforeend',`<article class="char-card variant-node-card" data-parent-id="${c.id}" data-variant-index="${index}"><div class="char-visual">${v.gif?`<img src="${v.gif}" alt="${escapeHtml(c.gameName||c.fileName)} variant">`:`<span class="initial">${escapeHtml((c.gameName||c.fileName||'?')[0])}</span>`}<span class="asset-spec">VARIANT // 540×960</span><span class="variant-node-badge">VARIANT</span><span class="zone-badge">${escapeHtml((c.zone||'Graveyard').toUpperCase())}</span></div><div class="char-info"><h3>${escapeHtml(c.gameName||c.fileName||'UNNAMED')}</h3><span class="code">${escapeHtml(v.name||`VARIANT_${index+1}`)}</span><div class="chips"><span class="chip">VARIANT NODE</span><span class="chip">PARENT: ${escapeHtml(c.fileName||'—')}</span></div></div></article>`);added++})});grid.querySelectorAll('.variant-node-card').forEach(card=>card.onclick=()=>openCharacter(card.dataset.parentId));if(added){grid.hidden=false;$('characterEmpty').hidden=true}}
