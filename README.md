@@ -26,6 +26,7 @@ A self-contained production tracker. Open `index.html` in a modern browser; no s
 - Character-prefab-created flag, included in character completion
 - NPC tab with image, mechanic description, six production checks, and six Unity checks
 - NPC create, browse, search, filter, edit, delete, drag-and-drop image, JSON backup, and CSV export
+- Festival application tab with location, date range, online/presential format, website, and Selected/Rejected/Waiting status tracking
 - Browser-local storage with completion summaries
 - Full JSON backup/import, including images
 - CSV export for spreadsheet handoff (image presence is recorded, but binary images are not embedded)

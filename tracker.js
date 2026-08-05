@@ -2,7 +2,21 @@ const PLANNER_KEY='skinator-planner-v1';
 const ROSTER_VIEW_KEY='skinator-roster-view-v1';
 const rosterView=publishedSnapshot?.rosterView||(()=>{try{return JSON.parse(localStorage.getItem(ROSTER_VIEW_KEY))||{showVariants:false,showSpawns:false}}catch{return{showVariants:false,showSpawns:false}}})();
 const planner=publishedSnapshot?.planner||(()=>{try{return JSON.parse(localStorage.getItem(PLANNER_KEY))||{customTasks:[],schedule:{},month:new Date().toISOString().slice(0,7)}}catch{return{customTasks:[],schedule:{},month:new Date().toISOString().slice(0,7)}}})();
-const savePlanner=()=>{localStorage.setItem(PLANNER_KEY,JSON.stringify(planner));window.skinatorCloudSave?.()};
+let plannerLocalSaveWarningShown=false;
+const savePlanner=()=>{
+  try{
+    localStorage.setItem(PLANNER_KEY,JSON.stringify(planner));
+    window.skinatorPlannerLocalSaveFailed=false;
+  }catch(error){
+    console.warn('Planner local cache could not be updated; cloud save will continue.',error);
+    window.skinatorPlannerLocalSaveFailed=true;
+    if(!plannerLocalSaveWarningShown){
+      plannerLocalSaveWarningShown=true;
+      toast('LOCAL CACHE FULL // SAVING TO SHARED CLOUD');
+    }
+  }
+  window.skinatorCloudSave?.();
+};
 
 document.querySelector('aside nav .nav:disabled')?.remove();
 document.querySelector('aside nav').insertAdjacentHTML('beforeend','<button class="nav" data-tab="parasytes"><i>◉</i> PARASITES <span id="navParasiteCount">42</span></button><button class="nav" data-tab="tracker"><i>▦</i> TRACKER <span id="navTaskCount">0</span></button>');

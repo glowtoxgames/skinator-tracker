@@ -231,3 +231,6 @@ setTab=function(tab){
 };
 influencerNav.onclick=()=>setTab('influencerAnalysis');
 renderInfluencerAnalysis();
+window.addEventListener('skinator-cloud-ready',event=>{
+  if(event.detail?.ready)renderInfluencerAnalysis();
+});
