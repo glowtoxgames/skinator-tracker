@@ -1,0 +1,123 @@
+.variant-editor {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.variant-item {
+  padding: 14px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #17191e, #101216);
+}
+
+.variant-item-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.variant-item-head label {
+  display: block;
+  aspect-ratio: auto;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.variant-item-head input[type="text"] {
+  margin-top: 7px;
+  padding: 10px;
+}
+
+.variant-item .variant-remove {
+  width: auto;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #663036;
+  border-radius: 7px;
+  background: #211316;
+  color: #e75a62;
+}
+
+.variant-assets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.variant-asset {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.variant-asset > small {
+  min-height: 15px;
+  color: #7d8189;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.variant-item .variant-assets label {
+  display: grid;
+  width: 100%;
+  height: 300px;
+  aspect-ratio: auto;
+  place-items: center;
+  border: 1px dashed #56343a;
+  border-radius: 10px;
+  background: radial-gradient(circle at 50% 35%, #25151a, #090a0c 72%);
+}
+
+.variant-item .variant-spawn-slot {
+  border-color: #604134;
+  background: radial-gradient(circle at 50% 35%, #2a1c16, #090a0c 72%);
+}
+
+.variant-item .variant-assets img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.variant-item .variant-assets span {
+  padding: 20px;
+  color: #a44a50;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.variant-asset-remove {
+  justify-self: start;
+  border: 0;
+  background: none;
+  color: #b34a50;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.variant-spawn-node {
+  border-color: #664433;
+}
+
+.variant-spawn-node .char-visual {
+  background: radial-gradient(circle at 50% 35%, #321f17, #090a0c 72%);
+}
+
+.variant-node-badge.variant-spawn-badge {
+  border-color: #9a6239;
+  background: #382316;
+  color: #f1b36e;
+}
+
+@media (max-width: 700px) {
+  .variant-assets { grid-template-columns: 1fr; }
+  .variant-item .variant-assets label { height: 330px; }
+}

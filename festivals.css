@@ -2,7 +2,7 @@
 .festival-panel>.festival-toolbar{position:static!important;top:auto!important;z-index:auto;gap:10px}
 .festival-toolbar .search{min-width:280px;flex:1}
 .festival-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;padding:17px}
-.festival-card{position:relative;min-height:220px;padding:19px;border:1px solid #30333a;border-left:4px solid #d3a43b;border-radius:14px;background:linear-gradient(145deg,#191b20,#101216);cursor:pointer;overflow:hidden;transition:transform .18s,border-color .18s,box-shadow .18s}
+.festival-card{position:relative;min-height:230px;padding:19px;border:1px solid #30333a;border-left:4px solid #d3a43b;border-radius:14px;background:linear-gradient(145deg,#191b20,#101216);cursor:pointer;overflow:hidden;transition:transform .18s,border-color .18s,box-shadow .18s;display:flex;flex-direction:column}
 .festival-card::after{content:"";position:absolute;right:-48px;bottom:-55px;width:150px;height:150px;border:1px solid rgba(255,255,255,.035);border-radius:50%;box-shadow:0 0 0 28px rgba(255,255,255,.018),0 0 0 55px rgba(255,255,255,.012);pointer-events:none}
 .festival-card:hover{transform:translateY(-3px);border-color:#7f454b;box-shadow:0 15px 35px rgba(0,0,0,.38)}
 .festival-card.festival-selected{border-left-color:#55d68a;background:linear-gradient(145deg,rgba(35,82,55,.36),#111418 62%)}
@@ -12,12 +12,12 @@
 .festival-status{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #8b6e25;border-radius:999px;background:#2d2614;color:#eccb66;font-size:9px;font-weight:800;letter-spacing:.09em}
 .festival-status.festival-selected{border-color:#347d50;background:#142b1d;color:#72dfa0}
 .festival-status.festival-rejected{border-color:#87373d;background:#30171a;color:#f07880}
-.festival-card h3{position:relative;z-index:1;margin:24px 0 8px;color:#f1f2f4;font:400 25px Georgia,serif;line-height:1.15}
+.festival-card h3{position:relative;z-index:1;margin:19px 0 8px;color:#f1f2f4;font:400 20px Georgia,serif;line-height:1.2;overflow-wrap:anywhere}
 .festival-location{position:relative;z-index:1;margin:0;color:#a7abb2;font-size:12px;line-height:1.45}
 .festival-location i{color:#db4c55;font-style:normal}
 .festival-dates{position:relative;z-index:1;margin:9px 0 0;color:#d1b965;font-size:11px;font-weight:700;line-height:1.45}
 .festival-dates i{color:#e1c660;font-style:normal;margin-right:3px}
-.festival-card-foot{position:absolute;z-index:2;left:19px;right:19px;bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:13px;border-top:1px solid #2d3036}
+.festival-card-foot{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:13px;border-top:1px solid #2d3036}
 .festival-card-foot a,.festival-card-foot span{color:#df5c64;font-size:9px;font-weight:800;letter-spacing:.08em;text-decoration:none}
 .festival-card-foot a:hover{color:#fff}
 .festival-card-foot small{color:#646972;font-size:8px;font-weight:700;letter-spacing:.08em}
