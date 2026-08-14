@@ -1,6 +1,6 @@
 const PLANNER_KEY='skinator-planner-v1';
 const ROSTER_VIEW_KEY='skinator-roster-view-v1';
-const rosterView=publishedSnapshot?.rosterView||(()=>{try{return JSON.parse(localStorage.getItem(ROSTER_VIEW_KEY))||{showVariants:false,showSpawns:false}}catch{return{showVariants:false,showSpawns:false}}})();
+const rosterView=publishedSnapshot?.rosterView||(()=>{try{return JSON.parse(localStorage.getItem(ROSTER_VIEW_KEY))||{showSpawns:false}}catch{return{showSpawns:false}}})();
 const planner=publishedSnapshot?.planner||(()=>{try{return JSON.parse(localStorage.getItem(PLANNER_KEY))||{customTasks:[],schedule:{},month:new Date().toISOString().slice(0,7)}}catch{return{customTasks:[],schedule:{},month:new Date().toISOString().slice(0,7)}}})();
 let plannerLocalSaveWarningShown=false;
 const savePlanner=()=>{
@@ -103,12 +103,11 @@ $('parasyteForm').onsubmit=e=>{
 loadParasites();
 
 const characterCore=$('bossCharacter').closest('.form-section');characterCore.insertAdjacentHTML('beforeend','<div class="planning-fields"><label>ESTIMATED DAYS TO FINISH<input id="characterEstimatedDays" type="number" min="1" max="365" placeholder="1"></label><label class="boss-check"><span>COMPLETION OVERRIDE</span><span class="check-row"><input id="characterForceComplete" type="checkbox"> FORCE CHARACTER COMPLETE</span></label></div>');
-$('completionFilter').insertAdjacentHTML('afterend','<div class="roster-view-switches"><label><input id="globalVariantNodes" type="checkbox"> DISPLAY VARIANTS</label><label><input id="globalSpawnView" type="checkbox"> DISPLAY SPAWNS</label></div>');
-$('globalVariantNodes').checked=!!rosterView.showVariants;$('globalSpawnView').checked=!!rosterView.showSpawns;
+$('completionFilter').insertAdjacentHTML('afterend','<div class="roster-view-switches"><label><input id="globalSpawnView" type="checkbox"> DISPLAY SPAWNS</label></div>');
+$('globalSpawnView').checked=!!rosterView.showSpawns;
 $('npcDescription').closest('div').insertAdjacentHTML('beforeend','<div class="planning-fields npc-planning-fields"><label>ZONE<select id="npcZone"><option value="Graveyard">GRAVEYARD</option><option value="Zoo">ZOO</option></select></label><label>ESTIMATED DAYS TO FINISH<input id="npcEstimatedDays" type="number" min="1" max="365" placeholder="1"></label><label class="boss-check"><span>COMPLETION OVERRIDE</span><span class="check-row"><input id="npcForceComplete" type="checkbox"> FORCE NPC COMPLETE</span></label></div>');
 
 const originalOpenCharacter=openCharacter;openCharacter=function(id=null){originalOpenCharacter(id);const c=state.characters.find(x=>x.id===id);$('characterEstimatedDays').value=c?.estimatedDays||'';$('characterForceComplete').checked=!!c?.forceComplete};
-const originalRenderVariantEditor=renderVariantEditor;renderVariantEditor=function(){originalRenderVariantEditor();document.querySelectorAll('.variant-item input[type="text"]').forEach(input=>input.placeholder='Variant file name')};
 const originalOpenNpc=openNpc;openNpc=function(id=null){originalOpenNpc(id);const n=state.npcs.find(x=>x.id===id);$('npcZone').value=n?.zone||'Graveyard';$('npcEstimatedDays').value=n?.estimatedDays||'';$('npcForceComplete').checked=!!n?.forceComplete};
 
 $('characterForm').addEventListener('submit',()=>{const id=state.editingChar,fileName=$('fileName').value.trim(),days=+$('characterEstimatedDays').value||1,forced=$('characterForceComplete').checked;setTimeout(()=>{const c=state.characters.find(x=>x.id===id)||(state.characters.find(x=>x.fileName===fileName));if(c){c.estimatedDays=days;c.forceComplete=forced;save();render();renderTracker()}},0)},true);
@@ -158,32 +157,9 @@ setTab=function(tab){
 };
 document.querySelector('.nav[data-tab="tracker"]').onclick=()=>setTab('tracker');document.querySelector('.nav[data-tab="parasytes"]').onclick=()=>setTab('parasytes');
 function decorateNpcCards(){document.querySelectorAll('.npc-card').forEach(card=>{const n=state.npcs.find(x=>x.id===card.dataset.id),visual=card.querySelector('.npc-visual');if(visual&&!visual.querySelector('.npc-zone-badge'))visual.insertAdjacentHTML('beforeend',`<span class="npc-zone-badge">${escapeHtml((n?.zone||'Graveyard').toUpperCase())}</span>`)})}
-function decorateVariantNodes(){
-  const grid=$('characterGrid');if(!grid)return;
-  grid.querySelectorAll('.variant-node-card').forEach(node=>node.remove());
-  let added=0;
-  state.characters.forEach(character=>{
-    if(!character.showVariantsAsNodes)return;
-    const status=completionFor(character),zone=character.zone||'Graveyard';
-    const query=`${character.gameName} ${character.fileName} ${(character.variants||[]).map(variant=>variant.name).join(' ')}`.toLowerCase();
-    if(!query.includes(state.charQuery)||(state.charZone!=='All'&&zone!==state.charZone)||(state.charType!=='All'&&(state.charType==='Boss')!==!!character.isBoss)||(state.completion!=='All'&&(state.completion==='Complete')!==status.complete))return;
-    (character.variants||[]).filter(variant=>variant.name||variant.gif||variant.spawnImage).forEach((variant,index)=>{
-      const showVariantSpawn=!!rosterView.showSpawns&&!!variant.spawnImage;
-      const visual=showVariantSpawn?variant.spawnImage:variant.gif;
-      const storagePath=showVariantSpawn?variant.spawnImageStoragePath:variant.gifStoragePath;
-      const label=showVariantSpawn?'VARIANT SPAWN':'VARIANT';
-      grid.insertAdjacentHTML('beforeend',`<article class="char-card variant-node-card ${showVariantSpawn?'spawn-view-card variant-spawn-node':''}" data-parent-id="${character.id}" data-variant-index="${index}"><div class="char-visual">${visual?`<img src="${visual}" alt="${escapeHtml(character.gameName||character.fileName)} ${escapeHtml(label.toLowerCase())}"${cloudImageAttrs(storagePath)}>`:`<span class="initial">${escapeHtml((character.gameName||character.fileName||'?')[0])}</span>`}<span class="asset-spec">${label}</span><span class="variant-node-badge ${showVariantSpawn?'variant-spawn-badge':''}">${label}</span><span class="zone-badge">${escapeHtml(zone.toUpperCase())}</span></div><div class="char-info"><h3>${escapeHtml(character.gameName||character.fileName||'UNNAMED')}</h3><span class="code">${escapeHtml(variant.name||`VARIANT_${index+1}`)}</span><div class="chips"><span class="chip">${showVariantSpawn?'MATCHING SPAWN':'VARIANT NODE'}</span>${rosterView.showSpawns&&!variant.spawnImage?'<span class="chip">NO MATCHING SPAWN</span>':''}<span class="chip">PARENT: ${escapeHtml(character.fileName||'—')}</span></div></div></article>`);
-      added++;
-    });
-  });
-  grid.querySelectorAll('.variant-node-card').forEach(card=>card.onclick=()=>openCharacter(card.dataset.parentId));
-  if(added){grid.hidden=false;$('characterEmpty').hidden=true}
-}
-function syncVariantDisplayFlag(){state.characters.forEach(c=>c.showVariantsAsNodes=!!rosterView.showVariants)}
-function groupVariantNodes(){state.characters.forEach(c=>{const parent=document.querySelector(`.char-card[data-id="${c.id}"]`),variants=[...document.querySelectorAll(`.variant-node-card[data-parent-id="${c.id}"]`)];if(parent)variants.reverse().forEach(node=>parent.insertAdjacentElement('afterend',node))})}
-function decorateCharacterCards(){document.querySelectorAll('.char-card').forEach(card=>{const c=state.characters.find(x=>x.id===(card.dataset.id||card.dataset.parentId)),visual=card.querySelector('.char-visual'),info=card.querySelector('.char-info'),status=visual?.querySelector('.status-badge');visual?.querySelector('.asset-spec')?.remove();if(status&&info){status.classList.add('centered-status');info.insertAdjacentElement('afterbegin',status)}if(rosterView.showSpawns&&!card.classList.contains('variant-node-card')&&c?.petImage&&visual){let img=visual.querySelector(':scope > img');if(!img){img=document.createElement('img');visual.prepend(img);visual.querySelector('.initial')?.remove()}img.src=c.petImage;img.alt=`${c.gameName||c.fileName} Spawn`;visual.querySelector('.pet-chip')?.remove();card.classList.add('spawn-view-card')}})}
+function decorateCharacterCards(){document.querySelectorAll('.char-card').forEach(card=>{const c=state.characters.find(x=>x.id===card.dataset.id),visual=card.querySelector('.char-visual'),info=card.querySelector('.char-info'),status=visual?.querySelector('.status-badge');visual?.querySelector('.asset-spec')?.remove();if(status&&info){status.classList.add('centered-status');info.insertAdjacentElement('afterbegin',status)}if(rosterView.showSpawns&&c?.petImage&&visual){let img=visual.querySelector(':scope > img');if(!img){img=document.createElement('img');visual.prepend(img);visual.querySelector('.initial')?.remove()}img.src=c.petImage;img.alt=`${c.gameName||c.fileName} Spawn`;visual.querySelector('.pet-chip')?.remove();card.classList.add('spawn-view-card')}})}
 function clearCharacterImageOverlays(){document.querySelectorAll('.char-card').forEach(card=>{const visual=card.querySelector('.char-visual'),chips=card.querySelector('.chips'),zone=visual?.querySelector('.zone-badge'),spawn=visual?.querySelector('.pet-chip');if(zone&&chips){chips.insertAdjacentHTML('beforeend',`<span class="chip">${escapeHtml(zone.textContent)}</span>`);zone.remove()}if(spawn&&chips){chips.insertAdjacentHTML('beforeend','<span class="chip">SPAWN READY</span>');spawn.remove()}})}
-const originalRender=render;render=function(){syncVariantDisplayFlag();originalRender();decorateNpcCards();decorateVariantNodes();groupVariantNodes();decorateCharacterCards();clearCharacterImageOverlays();if(!$('trackerView').hidden)renderTracker()};syncVariantDisplayFlag();decorateNpcCards();decorateVariantNodes();groupVariantNodes();decorateCharacterCards();clearCharacterImageOverlays();renderTracker();
+const originalRender=render;render=function(){originalRender();decorateNpcCards();decorateCharacterCards();clearCharacterImageOverlays();if(!$('trackerView').hidden)renderTracker()};decorateNpcCards();decorateCharacterCards();clearCharacterImageOverlays();renderTracker();
 function restartRosterGifs(){const objectUrls=[],images=[...document.querySelectorAll('#characterGrid .char-visual > img')].map(img=>({img,src:img.getAttribute('src')})).filter(x=>x.src).map(item=>{if(item.src.startsWith('data:')){const [header,payload]=item.src.split(','),mime=header.match(/data:([^;]+)/)?.[1]||'image/gif',binary=atob(payload),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);item.fresh=URL.createObjectURL(new Blob([bytes],{type:mime}));objectUrls.push(item.fresh)}return item});images.forEach(({img})=>img.removeAttribute('src'));requestAnimationFrame(()=>requestAnimationFrame(()=>{const stamp=Date.now();images.forEach(({img,src,fresh})=>{img.src=fresh||(src.includes('?')?`${src}&sync=${stamp}`:`${src}?sync=${stamp}`)});setTimeout(()=>objectUrls.forEach(URL.revokeObjectURL),300000)}))}
-$('globalVariantNodes').onchange=e=>{rosterView.showVariants=e.target.checked;localStorage.setItem(ROSTER_VIEW_KEY,JSON.stringify(rosterView));render();restartRosterGifs()};$('globalSpawnView').onchange=e=>{rosterView.showSpawns=e.target.checked;localStorage.setItem(ROSTER_VIEW_KEY,JSON.stringify(rosterView));render();restartRosterGifs()};
+$('globalSpawnView').onchange=e=>{rosterView.showSpawns=e.target.checked;localStorage.setItem(ROSTER_VIEW_KEY,JSON.stringify(rosterView));render();restartRosterGifs()};
 setTimeout(()=>{let changed=false;state.npcs.forEach(n=>{if(!n.zone){n.zone='Graveyard';changed=true}if(n.forceComplete){n.production=Object.fromEntries(productionTasks.map(t=>[t,true]));n.unity=Object.fromEntries(unityTasks.map(t=>[t,true]));changed=true}});if(changed){save();render()}},1200);
