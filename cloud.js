@@ -1,10 +1,17 @@
 if(!publishedSnapshot){
 const CLOUD_CONFIG=window.SKINATOR_SUPABASE_CONFIG;
 const cloudClient=CLOUD_CONFIG&&window.supabase?.createClient(CLOUD_CONFIG.url,CLOUD_CONFIG.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-let cloudUser=null,cloudRole=null,cloudReady=false,cloudSaving=false,cloudTimer=null,cloudServerSignature='',cloudPresenceChannel=null,cloudReloadTimer=null;
+let cloudUser=null,cloudRole=null,cloudReady=false,cloudSaving=false,cloudTimer=null,cloudServerSignature='',cloudPresenceChannel=null,cloudReloadTimer=null,cloudFallbackTimer=null,cloudRemoteFlushTimer=null,cloudRealtimeReady=false,cloudPendingPlannerChange=null;
+const CLOUD_FALLBACK_INTERVAL=2*60*1000,CLOUD_REALTIME_AUDIT_INTERVAL=5*60*1000,CLOUD_SIGNED_URL_TTL_SECONDS=60*60*24,CLOUD_SIGNED_URL_MARGIN=10*60*1000;
+const CLOUD_SIGNED_URL_CACHE_KEY=`skinator-signed-urls-v1:${CLOUD_CONFIG?.url||'local'}:${CLOUD_CONFIG?.bucket||'assets'}`;
 window.skinatorCloudReady=false;
 const cloudSetReady=ready=>{window.skinatorCloudReady=ready;window.dispatchEvent(new CustomEvent('skinator-cloud-ready',{detail:{ready}}))};
-const cloudRemoteKeys=new Set(),cloudHashes=new Map(),cloudAssetPaths=new Map();
+const cloudRemoteKeys=new Set(),cloudHashes=new Map(),cloudAssetPaths=new Map(),cloudRemoteUpdatedAt=new Map(),cloudPendingRecordChanges=new Map(),cloudSignedUrls=new Map(),cloudSignedRequests=new Map();
+let cloudPlannerUpdatedAt='';
+try{
+  const savedSignedUrls=JSON.parse(localStorage.getItem(CLOUD_SIGNED_URL_CACHE_KEY)||'[]'),now=Date.now();
+  if(Array.isArray(savedSignedUrls))for(const [path,entry] of savedSignedUrls)if(path&&entry?.url&&entry.expiresAt>now+CLOUD_SIGNED_URL_MARGIN)cloudSignedUrls.set(path,entry);
+}catch{}
 
 document.body.insertAdjacentHTML('beforeend',`<section class="cloud-auth" id="cloudAuth"><form class="cloud-login" id="cloudLogin"><div class="cloud-mark">S</div><small>SKINATOR SHARED CONTROL ROOM</small><h1>Team sign in</h1><p>Use the account approved for this production tracker.</p><label>EMAIL<input id="cloudEmail" type="email" required autocomplete="email"></label><label>PASSWORD<input id="cloudPassword" type="password" required autocomplete="current-password"></label><button class="btn red" type="submit">SIGN IN</button><p class="cloud-error" id="cloudError"></p></form></section><div class="cloud-bar" id="cloudBar" hidden><i class="cloud-dot"></i><div><b id="cloudState">CONNECTED</b><small id="cloudIdentity"></small><small class="cloud-problem" id="cloudProblem" hidden></small><small class="cloud-online" id="cloudOnline">1 ONLINE</small></div><button class="cloud-logout" id="cloudRetry" hidden>RETRY</button><button class="cloud-logout" id="cloudLogout">SIGN OUT</button></div><section class="cloud-migrate" id="cloudMigrate" hidden><div><b>SUPABASE IS EMPTY</b><p>Your local tracker is still safe. Upload its current characters, modifiers, NPCs, Parasites, Achievements, video analysis and calendar to create the shared version.</p></div><button class="btn red" id="cloudUploadLocal">UPLOAD LOCAL TRACKER</button></section>`);
 
@@ -17,7 +24,7 @@ const cloudSafe=value=>String(value||'asset').replace(/[^a-z0-9_-]+/gi,'-').repl
 
 async function cloudUploadDataUrl(value,kind,id,label){
   const blob=await fetch(value).then(r=>r.blob()),path=`${kind}/${cloudSafe(id)}/${Date.now()}-${crypto.randomUUID()}-${cloudSafe(label)}.${cloudMimeExtension(blob.type)}`;
-  const {error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).upload(path,blob,{contentType:blob.type,cacheControl:'3600'});if(error)throw error;return`storage://${path}`;
+  const {error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).upload(path,blob,{contentType:blob.type,cacheControl:'31536000'});if(error)throw error;return`storage://${path}`;
 }
 async function cloudSerialize(kind,id,source){
   const data=structuredClone(source),fields=cloudAssetFields[kind]||[];
@@ -25,7 +32,19 @@ async function cloudSerialize(kind,id,source){
   if(kind==='character')for(const [index,v] of (data.variants||[]).entries())for(const asset of [{field:'gif',storageField:'gifStoragePath',key:'variant',label:v.name||`variant-${index+1}`},{field:'spawnImage',storageField:'spawnImageStoragePath',key:'variant-spawn',label:`${v.name||`variant-${index+1}`}-spawn`}]){const value=v[asset.field],variantKey=`${kind}:${id}:${asset.key}:${v.id||index}`;if(typeof value==='string'&&value.startsWith('data:')){v[asset.field]=await cloudUploadDataUrl(value,kind,id,asset.label);cloudAssetPaths.set(variantKey,v[asset.field].slice(10))}else if(value&&cloudAssetPaths.has(variantKey))v[asset.field]=`storage://${cloudAssetPaths.get(variantKey)}`;else if(!value)cloudAssetPaths.delete(variantKey);delete v[asset.storageField]}
   return data;
 }
-async function cloudSigned(path){const {data,error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).createSignedUrl(path,60*60*24);if(error)throw error;return data.signedUrl}
+function cloudPersistSignedUrls(){
+  const now=Date.now(),entries=[...cloudSignedUrls].filter(([,entry])=>entry.expiresAt>now+CLOUD_SIGNED_URL_MARGIN);
+  cloudSignedUrls.clear();for(const [path,entry] of entries)cloudSignedUrls.set(path,entry);
+  try{localStorage.setItem(CLOUD_SIGNED_URL_CACHE_KEY,JSON.stringify(entries))}catch{}
+}
+async function cloudSigned(path,force=false){
+  const cached=cloudSignedUrls.get(path);
+  if(!force&&cached?.url&&cached.expiresAt>Date.now()+CLOUD_SIGNED_URL_MARGIN)return cached.url;
+  if(!force&&cloudSignedRequests.has(path))return cloudSignedRequests.get(path);
+  if(force)cloudSignedUrls.delete(path);
+  const request=(async()=>{const {data,error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).createSignedUrl(path,CLOUD_SIGNED_URL_TTL_SECONDS);if(error)throw error;const entry={url:data.signedUrl,expiresAt:Date.now()+CLOUD_SIGNED_URL_TTL_SECONDS*1000};cloudSignedUrls.set(path,entry);cloudPersistSignedUrls();return entry.url})().finally(()=>cloudSignedRequests.delete(path));
+  cloudSignedRequests.set(path,request);return request;
+}
 async function cloudMapLimit(items,limit,mapper){
   const results=new Array(items.length);let nextIndex=0;
   const workers=Array.from({length:Math.min(limit,items.length)},async()=>{
@@ -53,7 +72,7 @@ window.skinatorRefreshCloudImage=async image=>{
   if(image.dataset.refreshing==='true'){useFallback();return}
   if(!path){useFallback();return}
   image.dataset.refreshing='true';
-  try{image.src=await cloudSigned(path)}
+  try{image.src=await cloudSigned(path,true)}
   catch(error){console.error('Cloud image refresh failed',error);useFallback()}
 };
 async function cloudHydrate(kind,source){
@@ -70,18 +89,74 @@ async function cloudSaveNow(force=false){
     for(const group of cloudRecords())for(const item of group.items){const key=`${group.kind}:${item.id}`,data=await cloudSerialize(group.kind,item.id,item),hash=JSON.stringify(data);current.add(key);if(force||cloudHashes.get(key)!==hash){rows.push({id:String(item.id),record_type:group.kind,data,updated_by:cloudUser.id});cloudHashes.set(key,hash)}}
     if(rows.length){const {error}=await cloudClient.from('skinator_records').upsert(rows,{onConflict:'record_type,id'});if(error)throw error}
     const removed=[...cloudRemoteKeys].filter(key=>!current.has(key));for(const key of removed){const split=key.indexOf(':'),kind=key.slice(0,split),id=key.slice(split+1),{error}=await cloudClient.from('skinator_records').delete().eq('record_type',kind).eq('id',id);if(error)throw error;cloudRemoteKeys.delete(key);cloudHashes.delete(key)}
-    current.forEach(key=>cloudRemoteKeys.add(key));const {error:plannerError}=await cloudClient.from('skinator_planner').upsert({id:'main',data:planner,updated_by:cloudUser.id},{onConflict:'id'});if(plannerError)throw plannerError;cloudServerSignature=await cloudReadSignature();cloudSetState('ALL CHANGES SAVED',true);
+    current.forEach(key=>cloudRemoteKeys.add(key));const {error:plannerError}=await cloudClient.from('skinator_planner').upsert({id:'main',data:planner,updated_by:cloudUser.id},{onConflict:'id'});if(plannerError)throw plannerError;await cloudRefreshSignature();cloudSetState('ALL CHANGES SAVED',true);
   }catch(error){console.error(error);cloudSetProblem(error.message||'CHECK CONNECTION');cloudSetState('SYNC ERROR');toast(`CLOUD SAVE FAILED — ${error.message||'CHECK CONNECTION'}`)}finally{cloudSaving=false}
 }
 window.skinatorCloudSave=()=>{clearTimeout(cloudTimer);cloudTimer=setTimeout(()=>{cloudTimer=null;cloudSaveNow(false)},700)};
 
 const cloudMakeSignature=(rows,plannerUpdated='')=>`${rows.map(row=>`${row.record_type}:${row.id}:${row.updated_at}`).sort().join('|')}|planner:${plannerUpdated||''}`;
-async function cloudReadSignature(){const [{data:rows,error},{data:plan,error:planError}]=await Promise.all([cloudClient.from('skinator_records').select('id,record_type,updated_at'),cloudClient.from('skinator_planner').select('updated_at').eq('id','main').maybeSingle()]);if(error)throw error;if(planError)throw planError;return cloudMakeSignature(rows,plan?.updated_at)}
-function cloudScheduleReload(){clearTimeout(cloudReloadTimer);cloudReloadTimer=setTimeout(async()=>{cloudReloadTimer=null;if(cloudSaving||cloudTimer||document.querySelector('dialog[open]'))return;try{await cloudWithTimeout(cloudLoad(true),'TEAM DATA REFRESH')}catch(error){console.error(error);cloudSetReady(true);cloudSetProblem(error.message||'CHECK CONNECTION');cloudSetState('SYNC ERROR');toast(`TEAM REFRESH FAILED — ${error.message||'CHECK CONNECTION'}`)}},700)}
-async function cloudCheckUpdates(){if(!cloudReady||cloudSaving||cloudTimer||document.querySelector('dialog[open]'))return;try{const signature=await cloudReadSignature();if(cloudServerSignature&&signature!==cloudServerSignature)cloudScheduleReload()}catch(error){console.error(error)}}
+const cloudCurrentSignature=()=>`${[...cloudRemoteUpdatedAt].map(([key,updated_at])=>`${key}:${updated_at}`).sort().join('|')}|planner:${cloudPlannerUpdatedAt||''}`;
+function cloudRememberSignature(rows,plannerUpdated=''){
+  cloudRemoteUpdatedAt.clear();for(const row of rows||[])cloudRemoteUpdatedAt.set(`${row.record_type}:${row.id}`,row.updated_at||'');
+  cloudPlannerUpdatedAt=plannerUpdated||'';cloudServerSignature=cloudCurrentSignature();return cloudServerSignature;
+}
+async function cloudReadSignature(){const [{data:rows,error},{data:plan,error:planError}]=await Promise.all([cloudClient.from('skinator_records').select('id,record_type,updated_at'),cloudClient.from('skinator_planner').select('updated_at').eq('id','main').maybeSingle()]);if(error)throw error;if(planError)throw planError;return{rows:rows||[],plannerUpdated:plan?.updated_at||'',signature:cloudMakeSignature(rows||[],plan?.updated_at)}}
+async function cloudRefreshSignature(){const snapshot=await cloudReadSignature();return cloudRememberSignature(snapshot.rows,snapshot.plannerUpdated)}
+function cloudRecordItems(kind){return({character:state.characters,modifier:state.modifiers,npc:state.npcs,parasyte:parasytes,achievement:achievements,outreach:outreachRecords,publisher:publisherRecords,idea:ideaRecords,idea_category:ideaCategoryRecords,ongoing_task:ongoingTaskRecords,task_option:taskOptionRecords})[kind]||null}
+function cloudSetRecordItems(kind,items){
+  if(kind==='character')state.characters=items;else if(kind==='modifier')state.modifiers=items;else if(kind==='npc')state.npcs=items;else if(kind==='parasyte')parasytes=items;else if(kind==='achievement')achievements=items;else if(kind==='outreach')outreachRecords=items;else if(kind==='publisher')publisherRecords=items;else if(kind==='idea')ideaRecords=items;else if(kind==='idea_category')ideaCategoryRecords=items;else if(kind==='ongoing_task')ongoingTaskRecords=items;else if(kind==='task_option')taskOptionRecords=items;
+}
+function cloudPersistRemoteKinds(kinds){
+  if(['character','modifier','npc'].some(kind=>kinds.has(kind)))writeDatabase({schemaVersion:5,characters:state.characters,modifiers:state.modifiers,npcs:state.npcs}).catch(console.error);
+  if(kinds.has('achievement'))try{localStorage.setItem(ACHIEVEMENT_KEY,JSON.stringify(achievements))}catch{}
+  if(['outreach','publisher','idea','idea_category','ongoing_task','task_option'].some(kind=>kinds.has(kind)))try{localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords,ideaSeedRevision:IDEA_SEED_REVISION}))}catch{}
+}
+function cloudRenderActiveView(){
+  render();
+  if(state.tab==='parasytes')renderParasites();else if(state.tab==='achievements')renderAchievements();else if(['outreach','publishers','ideas','ongoing'].includes(state.tab))renderBusiness();else if(state.tab==='finished'&&typeof renderFinished==='function')renderFinished();else if(state.tab==='festivals'&&typeof renderFestivals==='function')renderFestivals();else if(state.tab==='influencerAnalysis'&&typeof renderInfluencerAnalysis==='function')renderInfluencerAnalysis();
+}
+async function cloudApplyRecordChange(payload,changedKinds){
+  const row=payload.eventType==='DELETE'?payload.old:payload.new,kind=row?.record_type,id=row?.id;
+  if(!kind||id==null)return false;
+  const items=cloudRecordItems(kind);if(!items)return false;const key=`${kind}:${id}`;
+  if(payload.eventType==='DELETE'){
+    cloudSetRecordItems(kind,items.filter(item=>String(item.id)!==String(id)));cloudRemoteKeys.delete(key);cloudHashes.delete(key);cloudRemoteUpdatedAt.delete(key);
+  }else{
+    if(row.data==null)return false;const hydrated=await cloudHydrate(kind,row.data),index=items.findIndex(item=>String(item.id)===String(id)),next=index<0?[hydrated,...items]:items.map((item,itemIndex)=>itemIndex===index?hydrated:item);
+    cloudSetRecordItems(kind,next);cloudRemoteKeys.add(key);cloudHashes.set(key,JSON.stringify(row.data));cloudRemoteUpdatedAt.set(key,row.updated_at||'');
+  }
+  changedKinds.add(kind);return true;
+}
+function cloudApplyPlannerChange(payload){
+  if(payload.eventType==='DELETE'||!payload.new?.data)return false;
+  Object.keys(planner).forEach(key=>delete planner[key]);Object.assign(planner,payload.new.data);cloudPlannerUpdatedAt=payload.new.updated_at||'';try{localStorage.setItem(PLANNER_KEY,JSON.stringify(planner))}catch{}return true;
+}
+function cloudScheduleRemoteFlush(){clearTimeout(cloudRemoteFlushTimer);cloudRemoteFlushTimer=setTimeout(cloudFlushRemoteChanges,500)}
+function cloudQueueRecordChange(payload){
+  if(payload.new?.updated_by&&payload.new.updated_by===cloudUser?.id)return;
+  const row=payload.eventType==='DELETE'?payload.old:payload.new,key=row?.record_type&&row?.id!=null?`${row.record_type}:${row.id}`:'';
+  if(!key){cloudScheduleReload();return}cloudPendingRecordChanges.set(key,payload);cloudScheduleRemoteFlush();
+}
+function cloudQueuePlannerChange(payload){if(payload.new?.updated_by&&payload.new.updated_by===cloudUser?.id)return;cloudPendingPlannerChange=payload;cloudScheduleRemoteFlush()}
+async function cloudFlushRemoteChanges(){
+  cloudRemoteFlushTimer=null;if(cloudSaving||cloudTimer||document.querySelector('dialog[open]')){cloudScheduleRemoteFlush();return}
+  const changes=[...cloudPendingRecordChanges.values()],plannerChange=cloudPendingPlannerChange;cloudPendingRecordChanges.clear();cloudPendingPlannerChange=null;const changedKinds=new Set();
+  try{
+    for(const payload of changes)if(!await cloudApplyRecordChange(payload,changedKinds))throw Error('INCOMPLETE REALTIME RECORD');
+    if(plannerChange&&!cloudApplyPlannerChange(plannerChange))throw Error('INCOMPLETE REALTIME PLANNER');
+    if(changes.length||plannerChange){const taskSourcesChanged=typeof syncTaskSources==='function'&&syncTaskSources({persist:false});cloudPersistRemoteKinds(changedKinds);cloudServerSignature=cloudCurrentSignature();cloudRenderActiveView();cloudSetState('ALL CHANGES SAVED',true);toast('TEAM CHANGES LOADED');if(taskSourcesChanged)window.skinatorCloudSave()}
+  }catch(error){console.error(error);cloudScheduleReload()}
+}
+function cloudScheduleReload(delay=700){clearTimeout(cloudReloadTimer);cloudReloadTimer=setTimeout(async()=>{cloudReloadTimer=null;if(cloudSaving||cloudTimer||document.querySelector('dialog[open]')){cloudScheduleReload(1000);return}try{await cloudWithTimeout(cloudLoad(true),'TEAM DATA REFRESH')}catch(error){console.error(error);cloudSetReady(true);cloudSetProblem(error.message||'CHECK CONNECTION');cloudSetState('SYNC ERROR');toast(`TEAM REFRESH FAILED — ${error.message||'CHECK CONNECTION'}`)}},delay)}
+async function cloudCheckUpdates(){if(!cloudReady||cloudSaving||cloudTimer||document.querySelector('dialog[open]'))return;try{const {signature}=await cloudReadSignature();if(cloudServerSignature&&signature!==cloudServerSignature)cloudScheduleReload();else if(!cloudServerSignature)cloudServerSignature=signature}catch(error){console.error(error)}}
+function cloudScheduleFallback(){
+  clearTimeout(cloudFallbackTimer);if(!cloudReady||document.hidden)return;const delay=cloudRealtimeReady?CLOUD_REALTIME_AUDIT_INTERVAL:CLOUD_FALLBACK_INTERVAL;
+  cloudFallbackTimer=setTimeout(async()=>{await cloudCheckUpdates();cloudScheduleFallback()},delay);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(cloudFallbackTimer);return}cloudCheckUpdates().finally(cloudScheduleFallback)});
 function cloudStartPresence(displayName){
   cloudPresenceChannel=cloudClient.channel('skinator-team-online',{config:{presence:{key:cloudUser.id}}});
-  cloudPresenceChannel.on('presence',{event:'sync'},()=>{const presences=Object.values(cloudPresenceChannel.presenceState()).flat(),people=[...new Map(presences.map(p=>[p.user_id,p])).values()],names=people.map(p=>p.name).filter(Boolean);$('cloudOnline').textContent=`${people.length} ONLINE${names.length?` // ${names.join(', ')}`:''}`;$('cloudOnline').title=names.join(', ')}).on('postgres_changes',{event:'*',schema:'public',table:'skinator_records'},cloudScheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'skinator_planner'},cloudScheduleReload).subscribe(async status=>{if(status==='SUBSCRIBED')await cloudPresenceChannel.track({user_id:cloudUser.id,name:displayName,role:cloudRole,online_at:new Date().toISOString()})});
+  cloudPresenceChannel.on('presence',{event:'sync'},()=>{const presences=Object.values(cloudPresenceChannel.presenceState()).flat(),people=[...new Map(presences.map(p=>[p.user_id,p])).values()],names=people.map(p=>p.name).filter(Boolean);$('cloudOnline').textContent=`${people.length} ONLINE${names.length?` // ${names.join(', ')}`:''}`;$('cloudOnline').title=names.join(', ')}).on('postgres_changes',{event:'*',schema:'public',table:'skinator_records'},cloudQueueRecordChange).on('postgres_changes',{event:'*',schema:'public',table:'skinator_planner'},cloudQueuePlannerChange).subscribe(async status=>{cloudRealtimeReady=status==='SUBSCRIBED';if(cloudRealtimeReady){cloudSetState('ALL CHANGES SAVED',true);try{await cloudPresenceChannel.track({user_id:cloudUser.id,name:displayName,role:cloudRole,online_at:new Date().toISOString()})}catch(error){console.error(error)}}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))cloudSetState('SYNC FALLBACK ACTIVE');cloudScheduleFallback()});
 }
 
 async function cloudLoad(isRefresh=false){
@@ -89,8 +164,8 @@ async function cloudLoad(isRefresh=false){
   if(!rows.length){cloudReady=true;cloudSetReady(true);$('cloudMigrate').hidden=false;cloudSetState('READY FOR FIRST UPLOAD');return}
   cloudRemoteKeys.clear();cloudHashes.clear();cloudAssetPaths.clear();const grouped={character:[],modifier:[],npc:[],parasyte:[],achievement:[],outreach:[],publisher:[],idea:[],idea_category:[],ongoing_task:[],task_option:[]};const hydratedRows=await cloudMapLimit(rows,8,async row=>({row,data:await cloudHydrate(row.record_type,row.data)}));for(const {row,data} of hydratedRows){const key=`${row.record_type}:${row.id}`;cloudRemoteKeys.add(key);cloudHashes.set(key,JSON.stringify(row.data));grouped[row.record_type]?.push(data)}
   const characterMigration=migrateCharacterVariants(grouped.character);state.characters=characterMigration.characters;state.modifiers=grouped.modifier;ensureSpawnModifiersInState();state.npcs=grouped.npc;parasytes=grouped.parasyte;const recoveredMissingAchievements=!grouped.achievement.length&&achievements.length;if(grouped.achievement.length)achievements=mergeAchievementSeed(grouped.achievement);localStorage.setItem(ACHIEVEMENT_KEY,JSON.stringify(achievements));
-  const {data:plan,error:planError}=await cloudClient.from('skinator_planner').select('data,updated_at').eq('id','main').maybeSingle();if(planError)throw planError;if(plan?.data){Object.keys(planner).forEach(k=>delete planner[k]);Object.assign(planner,plan.data)}const influencerAnalysisWasInitialized=!!planner.influencerAnalysisInitialized,businessInitialized=!!planner.businessInitialized,categoriesInitialized=!!planner.ideaCategoriesInitialized,tasksInitialized=!!planner.ongoingTasksInitialized,optionsInitialized=!!planner.taskOptionsInitialized,needsIdeaMigration=(planner.ideaSeedRevision||0)<IDEA_SEED_REVISION,recoveredMissingBusiness=(!grouped.outreach.length&&outreachRecords.length)||(!grouped.idea.length&&ideaRecords.length)||(!grouped.idea_category.length&&ideaCategoryRecords.length)||(!grouped.ongoing_task.length&&ongoingTaskRecords.length)||(!grouped.task_option.length&&taskOptionRecords.length);if(grouped.outreach.length)outreachRecords=grouped.outreach;if(grouped.publisher.length)publisherRecords=grouped.publisher;if(grouped.idea.length)ideaRecords=grouped.idea;if(grouped.idea_category.length)ideaCategoryRecords=grouped.idea_category;if(grouped.ongoing_task.length)ongoingTaskRecords=grouped.ongoing_task;if(grouped.task_option.length)taskOptionRecords=grouped.task_option;if(needsIdeaMigration){mergeLatestIdeaSeed();planner.ideaSeedRevision=IDEA_SEED_REVISION}if(!businessInitialized)planner.businessInitialized=true;if(!categoriesInitialized)planner.ideaCategoriesInitialized=true;if(!tasksInitialized)planner.ongoingTasksInitialized=true;if(!optionsInitialized)planner.taskOptionsInitialized=true;localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords,ideaSeedRevision:IDEA_SEED_REVISION}));const influencerAnalysisSeeded=typeof ensureInfluencerAnalysisSeed==='function'&&ensureInfluencerAnalysisSeed({persist:false});cloudServerSignature=cloudMakeSignature(rows,plan?.updated_at);
-  const taskSourcesChanged=typeof syncTaskSources==='function'&&syncTaskSources({persist:false});cloudReady=true;render();renderParasites();renderAchievements();renderTracker();renderBusiness();cloudSetReady(true);cloudSetState('ALL CHANGES SAVED',true);toast(characterMigration.migrated?`${characterMigration.migrated} VARIANTS CONVERTED TO CHARACTERS`:(isRefresh?'TEAM CHANGES LOADED':'SHARED TRACKER LOADED'));if(!businessInitialized||!categoriesInitialized||!tasksInitialized||!optionsInitialized||!influencerAnalysisWasInitialized||influencerAnalysisSeeded||recoveredMissingBusiness||recoveredMissingAchievements||needsIdeaMigration||taskSourcesChanged||characterMigration.changed)window.skinatorCloudSave();
+  const {data:plan,error:planError}=await cloudClient.from('skinator_planner').select('data,updated_at').eq('id','main').maybeSingle();if(planError)throw planError;if(plan?.data){Object.keys(planner).forEach(k=>delete planner[k]);Object.assign(planner,plan.data)}const influencerAnalysisWasInitialized=!!planner.influencerAnalysisInitialized,businessInitialized=!!planner.businessInitialized,categoriesInitialized=!!planner.ideaCategoriesInitialized,tasksInitialized=!!planner.ongoingTasksInitialized,optionsInitialized=!!planner.taskOptionsInitialized,needsIdeaMigration=(planner.ideaSeedRevision||0)<IDEA_SEED_REVISION,recoveredMissingBusiness=(!grouped.outreach.length&&outreachRecords.length)||(!grouped.idea.length&&ideaRecords.length)||(!grouped.idea_category.length&&ideaCategoryRecords.length)||(!grouped.ongoing_task.length&&ongoingTaskRecords.length)||(!grouped.task_option.length&&taskOptionRecords.length);if(grouped.outreach.length)outreachRecords=grouped.outreach;if(grouped.publisher.length)publisherRecords=grouped.publisher;if(grouped.idea.length)ideaRecords=grouped.idea;if(grouped.idea_category.length)ideaCategoryRecords=grouped.idea_category;if(grouped.ongoing_task.length)ongoingTaskRecords=grouped.ongoing_task;if(grouped.task_option.length)taskOptionRecords=grouped.task_option;if(needsIdeaMigration){mergeLatestIdeaSeed();planner.ideaSeedRevision=IDEA_SEED_REVISION}if(!businessInitialized)planner.businessInitialized=true;if(!categoriesInitialized)planner.ideaCategoriesInitialized=true;if(!tasksInitialized)planner.ongoingTasksInitialized=true;if(!optionsInitialized)planner.taskOptionsInitialized=true;localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords,ideaSeedRevision:IDEA_SEED_REVISION}));const influencerAnalysisSeeded=typeof ensureInfluencerAnalysisSeed==='function'&&ensureInfluencerAnalysisSeed({persist:false});cloudRememberSignature(rows,plan?.updated_at);
+  const taskSourcesChanged=typeof syncTaskSources==='function'&&syncTaskSources({persist:false});cloudReady=true;cloudRenderActiveView();cloudSetReady(true);cloudSetState('ALL CHANGES SAVED',true);toast(characterMigration.migrated?`${characterMigration.migrated} VARIANTS CONVERTED TO CHARACTERS`:(isRefresh?'TEAM CHANGES LOADED':'SHARED TRACKER LOADED'));if(!businessInitialized||!categoriesInitialized||!tasksInitialized||!optionsInitialized||!influencerAnalysisWasInitialized||influencerAnalysisSeeded||recoveredMissingBusiness||recoveredMissingAchievements||needsIdeaMigration||taskSourcesChanged||characterMigration.changed)window.skinatorCloudSave();
 }
 async function cloudStart(session){
   await window.skinatorLocalReady;
@@ -98,7 +173,7 @@ async function cloudStart(session){
   const displayName=membership.display_name||'TEAM MEMBER';cloudRole=membership.role;$('cloudAuth').hidden=true;$('cloudBar').hidden=false;$('cloudIdentity').textContent=`${displayName} // ${cloudRole.toUpperCase()}`;
   try{await cloudWithTimeout(cloudLoad(),'SHARED DATA LOAD')}
   catch(loadError){cloudReady=false;cloudSetReady(false);cloudSetProblem(loadError.message||'CHECK CONNECTION');cloudSetState('SYNC ERROR');toast(`CLOUD LOAD FAILED — ${loadError.message||'CHECK CONNECTION'}`);throw loadError}
-  cloudStartPresence(displayName);setInterval(cloudCheckUpdates,10000);
+  cloudStartPresence(displayName);cloudScheduleFallback();
 }
 $('cloudLogin').onsubmit=async event=>{event.preventDefault();$('cloudError').textContent='SIGNING IN…';const {data,error}=await cloudClient.auth.signInWithPassword({email:$('cloudEmail').value.trim(),password:$('cloudPassword').value});if(error){$('cloudError').textContent=error.message.toUpperCase();return}try{await cloudStart(data.session)}catch(startError){$('cloudError').textContent=startError.message}};
 $('cloudLogout').onclick=async()=>{await cloudClient.auth.signOut();location.reload()};

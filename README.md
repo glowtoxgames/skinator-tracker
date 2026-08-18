@@ -36,6 +36,12 @@ A self-contained production tracker. Open `index.html` in a modern browser; no s
 
 Use **Export → JSON backup** to transfer the complete dataset to another person. They can open the app and choose **Import**. Keep exported JSON files in a shared drive or commit them to a GitHub repository for a simple reviewable workflow.
 
+### Supabase Realtime setup
+
+For instant multi-user synchronization, run `supabase-realtime.sql` once in the Supabase SQL Editor for the tracker project. The app applies individual Realtime changes immediately and keeps a lightweight two-minute fallback check while the tab is visible. When Realtime is connected, the fallback becomes a five-minute consistency check.
+
+Storage preview URLs are reused for their 24-hour lifetime, and media is rendered only for the open section. Uploads use immutable object paths and a one-year browser cache lifetime to prevent repeated GIF and image downloads.
+
 Suggested repository layout:
 
 ```

@@ -114,7 +114,7 @@ if(typeof addNodeZoom==='function')addNodeZoom({viewId:'achievementsView',gridId
 function achievementImage(icon,storagePath,name){
   const fallback=icon&&storagePath?` data-fallback="${escapeHtml(icon)}"`:'';
   const storage=storagePath?` data-storage-path="${escapeHtml(storagePath)}" onerror="window.skinatorRefreshCloudImage?.(this)"`:'';
-  return `<img src="${escapeHtml(icon||'')}" alt="${escapeHtml(name)}"${storage}${fallback}>`;
+  return `<img src="${escapeHtml(icon||'')}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"${storage}${fallback}>`;
 }
 function saveAchievements(){
   localStorage.setItem(ACHIEVEMENT_KEY,JSON.stringify(achievements));
