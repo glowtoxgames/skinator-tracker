@@ -29,7 +29,7 @@ document.querySelector('main').insertAdjacentHTML('beforeend',`<section id="trac
 document.querySelector('main').insertAdjacentHTML('beforeend',`<section id="parasytesView" hidden><div class="stats"><article><label>PARASITE NODES</label><b id="parasyteCount">42</b><small>ALL LEVELS</small></article><article><label>COMPLETE FAMILIES</label><b id="parasyteFamilyComplete">0/12</b><small>EVERY LEVEL COMPLETE</small></article><article><label>COMPLETE PARASITES</label><b id="parasyteCompleteCount">0/42</b><small>GIF + DESCRIPTION + IN GAME</small></article><article><label>WITH GIF</label><b id="parasyteGifCount">0</b><small>500 × 500 ASSETS</small></article></div><section class="panel"><div class="toolbar"><label class="search">⌕ <input id="parasyteSearch" placeholder="SEARCH PARASITES"></label><span id="parasyteResultCount"></span></div><div id="parasyteFamilies" class="parasyte-families"></div></section></section>`);
 document.body.insertAdjacentHTML('beforeend',`<dialog id="parasyteDialog"><form id="parasyteForm"><div class="dialog-head"><div><p>PARASITE DATABASE</p><h2 id="parasyteDialogTitle"></h2></div><button type="button" class="x" id="closeParasite">×</button></div><div class="dialog-body"><div class="parasyte-editor"><label class="parasyte-upload drop-target" id="parasyteGifDrop"><input id="parasyteGifInput" type="file" accept="image/gif" hidden><img id="parasyteGifPreview" hidden><span id="parasyteGifPrompt">＋ CLICK OR DROP<br>500 × 500 GIF</span></label><div><label>FAMILY *<input id="parasyteFamily" list="parasyteFamilyOptions" required placeholder="PARASITE FAMILY"><datalist id="parasyteFamilyOptions"></datalist></label><label>LEVEL *<select id="parasyteLevel" required><option>Lesser</option><option>Mature</option><option>Evolved</option><option>Apex</option></select></label><label>DESCRIPTION<textarea id="parasyteDescription" rows="5"></textarea></label><label>ESTIMATED DAYS TO FINISH<input id="parasyteEstimatedDays" type="number" min="1" max="365" value="1"></label><label class="parasyte-implemented"><span>GAME STATUS</span><span class="check-row"><input id="parasyteImplemented" type="checkbox"> IMPLEMENTED INTO THE GAME</span></label><button type="button" class="remove" id="removeParasiteGif">REMOVE GIF</button></div></div></div><div class="dialog-actions"><button type="button" class="btn danger" id="deleteParasite" hidden>DELETE PARASITE</button><span></span><button type="button" class="btn ghost" id="cancelParasite">CANCEL</button><button class="btn red" type="submit">SAVE PARASITE</button></div></form></dialog>`);
 
-let parasytes=(publishedSnapshot?.parasytes||PARASITE_SEED).map(p=>({...p})),editingParasiteId=null,editingParasiteGif='',deletedParasyteSeedIds=new Set();
+let parasytes=(publishedSnapshot?.parasytes||PARASITE_SEED).map(p=>({...p})),editingParasiteId=null,editingParasiteGif='',editingParasiteGifRemoved=false,deletedParasyteSeedIds=new Set();
 const openParasiteDatabase=()=>new Promise((resolve,reject)=>{const request=indexedDB.open('skinator-parasyte-database',1);request.onupgradeneeded=()=>request.result.createObjectStore('data');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 function mergeSavedParasites(saved){
   const records=Array.isArray(saved)?saved:Array.isArray(saved?.records)?saved.records:[];
@@ -50,6 +50,7 @@ function openParasite(id=null){
   if(id&&!p)return;
   editingParasiteId=p?.id||null;
   editingParasiteGif=p?.gif||'';
+  editingParasiteGifRemoved=false;
   $('parasyteForm').reset();
   $('parasyteDialogTitle').textContent=p?`${p.level} ${p.family}`:'New Parasite';
   $('parasyteFamilyOptions').replaceChildren(...[...new Set(parasytes.map(parasyte=>parasyte.family))].sort((left,right)=>left.localeCompare(right)).map(family=>{const option=document.createElement('option');option.value=family;return option}));
@@ -64,11 +65,11 @@ function openParasite(id=null){
   $('parasyteDialog').showModal();
   if(!p)$('parasyteFamily').focus();
 }
-function acceptParasiteGif(file){if(!file||file.type!=='image/gif')return toast('PARASITE ASSETS MUST BE GIF FILES');fileData(file,data=>{const img=new Image();img.onload=()=>{if(img.naturalWidth!==500||img.naturalHeight!==500)return toast(`INVALID SIZE — ${img.naturalWidth}×${img.naturalHeight}. REQUIRED 500×500`);editingParasiteGif=data;setPreview('parasyteGifPreview','parasyteGifPrompt',data);$('removeParasiteGif').hidden=false};img.src=data})}
+function acceptParasiteGif(file){if(!file||file.type!=='image/gif')return toast('PARASITE ASSETS MUST BE GIF FILES');fileData(file,data=>{const img=new Image();img.onload=()=>{if(img.naturalWidth!==500||img.naturalHeight!==500)return toast(`INVALID SIZE — ${img.naturalWidth}×${img.naturalHeight}. REQUIRED 500×500`);editingParasiteGif=data;editingParasiteGifRemoved=false;setPreview('parasyteGifPreview','parasyteGifPrompt',data);$('removeParasiteGif').hidden=false};img.src=data})}
 $('parasyteSearch').oninput=renderParasites;
 $('parasyteGifInput').onchange=e=>acceptParasiteGif(e.target.files[0]);
 setupDrop($('parasyteGifDrop'),acceptParasiteGif);
-$('removeParasiteGif').onclick=()=>{editingParasiteGif='';setPreview('parasyteGifPreview','parasyteGifPrompt','');$('removeParasiteGif').hidden=true};
+$('removeParasiteGif').onclick=()=>{editingParasiteGif='';editingParasiteGifRemoved=true;setPreview('parasyteGifPreview','parasyteGifPrompt','');$('removeParasiteGif').hidden=true};
 $('closeParasite').onclick=$('cancelParasite').onclick=()=>$('parasyteDialog').close();
 $('deleteParasite').onclick=()=>{
   const p=parasytes.find(parasyte=>parasyte.id===editingParasiteId);
@@ -92,6 +93,7 @@ $('parasyteForm').onsubmit=e=>{
   const duplicate=parasytes.some(parasyte=>parasyte.id!==editingParasiteId&&parasyte.family.trim().toLowerCase()===family.toLowerCase()&&parasyte.level===level);
   if(duplicate)return toast('THAT PARASITE LEVEL ALREADY EXISTS');
   const now=new Date().toISOString(),existing=parasytes.find(parasyte=>parasyte.id===editingParasiteId),p=existing||{id:crypto.randomUUID(),createdAt:now};
+  if(existing&&editingParasiteGifRemoved)window.skinatorCloudRemoveAsset?.('parasyte',p.id,'gif');
   Object.assign(p,{family,level,description:$('parasyteDescription').value.trim(),gif:editingParasiteGif,estimatedDays:+$('parasyteEstimatedDays').value||1,implemented:$('parasyteImplemented').checked,updatedAt:now});
   if(!existing)parasytes.push(p);
   saveParasites();

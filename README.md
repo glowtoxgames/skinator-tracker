@@ -42,6 +42,12 @@ For instant multi-user synchronization, run `supabase-realtime.sql` once in the 
 
 Storage preview URLs are reused for their 24-hour lifetime, and media is rendered only for the open section. Uploads use immutable object paths and a one-year browser cache lifetime to prevent repeated GIF and image downloads.
 
+### Supabase Storage cleanup setup
+
+Run `supabase-storage-cleanup.sql` once in the Supabase SQL Editor. It gives approved team editors permission to remove replaced files and lets the organization owner use the **Clean Storage** button in the tracker.
+
+After a successful save, the tracker automatically removes an old image when it is replaced, cleared, or its record is deleted. The owner-only cleanup button scans the `skinator-assets` bucket for files that are not referenced by any current tracker record. It shows the number and size first, requires confirmation, rechecks the database immediately before deletion, and ignores files uploaded during the last hour.
+
 Suggested repository layout:
 
 ```

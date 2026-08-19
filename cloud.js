@@ -2,34 +2,97 @@ if(!publishedSnapshot){
 const CLOUD_CONFIG=window.SKINATOR_SUPABASE_CONFIG;
 const cloudClient=CLOUD_CONFIG&&window.supabase?.createClient(CLOUD_CONFIG.url,CLOUD_CONFIG.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 let cloudUser=null,cloudRole=null,cloudReady=false,cloudSaving=false,cloudTimer=null,cloudServerSignature='',cloudPresenceChannel=null,cloudReloadTimer=null,cloudFallbackTimer=null,cloudRemoteFlushTimer=null,cloudRealtimeReady=false,cloudPendingPlannerChange=null;
-const CLOUD_FALLBACK_INTERVAL=2*60*1000,CLOUD_REALTIME_AUDIT_INTERVAL=5*60*1000,CLOUD_SIGNED_URL_TTL_SECONDS=60*60*24,CLOUD_SIGNED_URL_MARGIN=10*60*1000;
+const CLOUD_FALLBACK_INTERVAL=2*60*1000,CLOUD_REALTIME_AUDIT_INTERVAL=5*60*1000,CLOUD_SIGNED_URL_TTL_SECONDS=60*60*24,CLOUD_SIGNED_URL_MARGIN=10*60*1000,CLOUD_ORPHAN_MIN_AGE=60*60*1000;
 const CLOUD_SIGNED_URL_CACHE_KEY=`skinator-signed-urls-v1:${CLOUD_CONFIG?.url||'local'}:${CLOUD_CONFIG?.bucket||'assets'}`;
 window.skinatorCloudReady=false;
 const cloudSetReady=ready=>{window.skinatorCloudReady=ready;window.dispatchEvent(new CustomEvent('skinator-cloud-ready',{detail:{ready}}))};
-const cloudRemoteKeys=new Set(),cloudHashes=new Map(),cloudAssetPaths=new Map(),cloudRemoteUpdatedAt=new Map(),cloudPendingRecordChanges=new Map(),cloudSignedUrls=new Map(),cloudSignedRequests=new Map();
+const cloudRemoteKeys=new Set(),cloudHashes=new Map(),cloudAssetPaths=new Map(),cloudExplicitlyRemovedAssets=new Set(),cloudRemoteUpdatedAt=new Map(),cloudPendingRecordChanges=new Map(),cloudSignedUrls=new Map(),cloudSignedRequests=new Map();
 let cloudPlannerUpdatedAt='';
 try{
   const savedSignedUrls=JSON.parse(localStorage.getItem(CLOUD_SIGNED_URL_CACHE_KEY)||'[]'),now=Date.now();
   if(Array.isArray(savedSignedUrls))for(const [path,entry] of savedSignedUrls)if(path&&entry?.url&&entry.expiresAt>now+CLOUD_SIGNED_URL_MARGIN)cloudSignedUrls.set(path,entry);
 }catch{}
 
-document.body.insertAdjacentHTML('beforeend',`<section class="cloud-auth" id="cloudAuth"><form class="cloud-login" id="cloudLogin"><div class="cloud-mark">S</div><small>SKINATOR SHARED CONTROL ROOM</small><h1>Team sign in</h1><p>Use the account approved for this production tracker.</p><label>EMAIL<input id="cloudEmail" type="email" required autocomplete="email"></label><label>PASSWORD<input id="cloudPassword" type="password" required autocomplete="current-password"></label><button class="btn red" type="submit">SIGN IN</button><p class="cloud-error" id="cloudError"></p></form></section><div class="cloud-bar" id="cloudBar" hidden><i class="cloud-dot"></i><div><b id="cloudState">CONNECTED</b><small id="cloudIdentity"></small><small class="cloud-problem" id="cloudProblem" hidden></small><small class="cloud-online" id="cloudOnline">1 ONLINE</small></div><button class="cloud-logout" id="cloudRetry" hidden>RETRY</button><button class="cloud-logout" id="cloudLogout">SIGN OUT</button></div><section class="cloud-migrate" id="cloudMigrate" hidden><div><b>SUPABASE IS EMPTY</b><p>Your local tracker is still safe. Upload its current characters, modifiers, NPCs, Parasites, Achievements, video analysis and calendar to create the shared version.</p></div><button class="btn red" id="cloudUploadLocal">UPLOAD LOCAL TRACKER</button></section>`);
+document.body.insertAdjacentHTML('beforeend',`<section class="cloud-auth" id="cloudAuth"><form class="cloud-login" id="cloudLogin"><div class="cloud-mark">S</div><small>SKINATOR SHARED CONTROL ROOM</small><h1>Team sign in</h1><p>Use the account approved for this production tracker.</p><label>EMAIL<input id="cloudEmail" type="email" required autocomplete="email"></label><label>PASSWORD<input id="cloudPassword" type="password" required autocomplete="current-password"></label><button class="btn red" type="submit">SIGN IN</button><p class="cloud-error" id="cloudError"></p></form></section><div class="cloud-bar" id="cloudBar" hidden><i class="cloud-dot"></i><div><b id="cloudState">CONNECTED</b><small id="cloudIdentity"></small><small class="cloud-problem" id="cloudProblem" hidden></small><small class="cloud-online" id="cloudOnline">1 ONLINE</small></div><button class="cloud-logout" id="cloudRetry" hidden>RETRY</button><button class="cloud-logout" id="cloudCleanup" hidden>CLEAN STORAGE</button><button class="cloud-logout" id="cloudLogout">SIGN OUT</button></div><section class="cloud-migrate" id="cloudMigrate" hidden><div><b>SUPABASE IS EMPTY</b><p>Your local tracker is still safe. Upload its current characters, modifiers, NPCs, Parasites, Achievements, video analysis and calendar to create the shared version.</p></div><button class="btn red" id="cloudUploadLocal">UPLOAD LOCAL TRACKER</button></section>`);
 
 const cloudSetState=(label,synced=false)=>{const bar=$('cloudBar');$('cloudState').textContent=label;bar.classList.toggle('synced',synced)};
 const cloudSetProblem=message=>{const problem=$('cloudProblem');problem.textContent=String(message||'').toUpperCase();problem.hidden=!message;$('cloudRetry').hidden=!message;$('cloudBar').title=String(message||'')};
 const cloudStable=value=>JSON.stringify(value,Object.keys(value||{}).sort());
 const cloudAssetFields={character:['mainGif','petImage'],modifier:['iconData'],npc:['image'],parasyte:['gif'],achievement:['unlockedIcon','lockedIcon']};
+const cloudManagedStorageRoots=new Set(Object.keys(cloudAssetFields));
 const cloudMimeExtension=mime=>({'image/gif':'gif','image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/svg+xml':'svg'})[mime]||'bin';
 const cloudSafe=value=>String(value||'asset').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'asset';
+const cloudStoragePath=value=>typeof value==='string'&&value.startsWith('storage://')?value.slice(10):'';
+const cloudIsManagedStoragePath=path=>cloudManagedStorageRoots.has(String(path||'').split('/')[0]);
+window.skinatorCloudRemoveAsset=(kind,id,field)=>{if(kind&&id!=null&&field)cloudExplicitlyRemovedAssets.add(`${kind}:${id}:${field}`)};
 
 async function cloudUploadDataUrl(value,kind,id,label){
   const blob=await fetch(value).then(r=>r.blob()),path=`${kind}/${cloudSafe(id)}/${Date.now()}-${crypto.randomUUID()}-${cloudSafe(label)}.${cloudMimeExtension(blob.type)}`;
   const {error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).upload(path,blob,{contentType:blob.type,cacheControl:'31536000'});if(error)throw error;return`storage://${path}`;
 }
-async function cloudSerialize(kind,id,source){
+function cloudCollectStoragePaths(value,paths=new Set()){
+  if(typeof value==='string'){const path=cloudStoragePath(value);if(path)paths.add(path);return paths}
+  if(Array.isArray(value)){for(const item of value)cloudCollectStoragePaths(item,paths);return paths}
+  if(value&&typeof value==='object')for(const item of Object.values(value))cloudCollectStoragePaths(item,paths);
+  return paths;
+}
+async function cloudFetchReferencedPaths(){
+  const paths=new Set(),pageSize=1000;
+  for(let offset=0;;offset+=pageSize){const {data,error}=await cloudClient.from('skinator_records').select('id,record_type,data').order('record_type').order('id').range(offset,offset+pageSize-1);if(error)throw error;for(const row of data||[])cloudCollectStoragePaths(row.data,paths);if((data||[]).length<pageSize)break}
+  return paths;
+}
+async function cloudRemoveStoragePaths(paths){
+  const unique=[...new Set(paths)].filter(cloudIsManagedStoragePath);let removed=0;
+  for(let index=0;index<unique.length;index+=100){const batch=unique.slice(index,index+100),{error}=await cloudClient.storage.from(CLOUD_CONFIG.bucket).remove(batch);if(error)throw error;removed+=batch.length;for(const path of batch){cloudSignedUrls.delete(path);cloudSignedRequests.delete(path)}}
+  if(removed)cloudPersistSignedUrls();return removed;
+}
+async function cloudRemoveUnreferencedPaths(paths){
+  const referenced=await cloudFetchReferencedPaths(),unused=[...new Set(paths)].filter(path=>cloudIsManagedStoragePath(path)&&!referenced.has(path));
+  return cloudRemoveStoragePaths(unused);
+}
+async function cloudListManagedStorageFiles(){
+  const files=[],folders=[...cloudManagedStorageRoots],seen=new Set(),pageSize=1000,bucket=cloudClient.storage.from(CLOUD_CONFIG.bucket);
+  while(folders.length){const folder=folders.shift();if(seen.has(folder))continue;seen.add(folder);for(let offset=0;;offset+=pageSize){const {data,error}=await bucket.list(folder,{limit:pageSize,offset,sortBy:{column:'name',order:'asc'}});if(error)throw error;for(const item of data||[]){const path=`${folder}/${item.name}`;if(!item.id&&!item.metadata)folders.push(path);else files.push({...item,path})}if((data||[]).length<pageSize)break}}
+  return files;
+}
+const cloudFormatBytes=bytes=>{const value=Number(bytes)||0;if(value<1024)return`${value} B`;if(value<1024**2)return`${(value/1024).toFixed(1)} KB`;if(value<1024**3)return`${(value/1024**2).toFixed(1)} MB`;return`${(value/1024**3).toFixed(2)} GB`};
+async function cloudRunStorageCleanup(){
+  if(cloudRole!=='owner'){toast('ONLY THE OWNER CAN CLEAN SHARED STORAGE');return}
+  if(cloudSaving){toast('WAIT FOR THE CURRENT SAVE TO FINISH');return}
+  const button=$('cloudCleanup'),originalLabel=button.textContent;button.disabled=true;button.textContent='CHECKING…';
+  try{
+    clearTimeout(cloudTimer);cloudTimer=null;await cloudSaveNow(false);if(!$('cloudProblem').hidden)throw Error('SAVE CURRENT CHANGES BEFORE CLEANING STORAGE');
+    cloudSetState('CHECKING STORAGE…');const [referenced,files]=await Promise.all([cloudFetchReferencedPaths(),cloudListManagedStorageFiles()]),cutoff=Date.now()-CLOUD_ORPHAN_MIN_AGE;
+    const unused=files.filter(file=>{const changedAt=Date.parse(file.updated_at||file.created_at||'');return Number.isFinite(changedAt)&&changedAt<=cutoff&&!referenced.has(file.path)});
+    if(!unused.length){cloudSetState('ALL CHANGES SAVED',true);toast('NO UNUSED TRACKER IMAGES FOUND');return}
+    const totalBytes=unused.reduce((sum,file)=>sum+(Number(file.metadata?.size)||0),0),preview=unused.slice(0,5).map(file=>`• ${file.path}`).join('\n'),more=unused.length>5?`\n• …and ${unused.length-5} more`:'';
+    if(!confirm(`Delete ${unused.length} unused tracker file${unused.length===1?'':'s'} (${cloudFormatBytes(totalBytes)})?\n\nThese files are not referenced by any current Supabase record and are at least one hour old. This cannot be undone.\n\n${preview}${more}`)){cloudSetState('ALL CHANGES SAVED',true);return}
+    button.textContent='RECHECKING…';cloudSetState('RECHECKING STORAGE…');const latestReferences=await cloudFetchReferencedPaths(),confirmedUnused=unused.filter(file=>!latestReferences.has(file.path));
+    if(!confirmedUnused.length){cloudSetState('ALL CHANGES SAVED',true);toast('THE FILES ARE NOW IN USE — NOTHING DELETED');return}
+    button.textContent='DELETING…';cloudSetState(`DELETING ${confirmedUnused.length} FILE${confirmedUnused.length===1?'':'S'}…`);const removed=await cloudRemoveStoragePaths(confirmedUnused.map(file=>file.path));cloudSetProblem('');cloudSetState('ALL CHANGES SAVED',true);toast(`${removed} UNUSED FILE${removed===1?'':'S'} DELETED`);
+  }catch(error){console.error(error);cloudSetProblem(error.message||'STORAGE CLEANUP FAILED');cloudSetState('CLEANUP ERROR');toast(`STORAGE CLEANUP FAILED — ${error.message||'CHECK CONNECTION'}`)}finally{button.disabled=false;button.textContent=originalLabel}
+}
+function cloudSetAssetPath(assetKey,path,previousPath,obsoletePaths){
+  if(previousPath&&previousPath!==path)obsoletePaths.add(previousPath);
+  if(path)cloudAssetPaths.set(assetKey,path);else cloudAssetPaths.delete(assetKey);
+}
+async function cloudSerialize(kind,id,source,obsoletePaths=new Set(),activeAssetKeys=new Set()){
   const data=structuredClone(source),fields=cloudAssetFields[kind]||[];
-  for(const field of fields){const value=data[field],storagePath=data[`${field}StoragePath`],assetKey=`${kind}:${id}:${field}`;if(typeof value==='string'&&value.startsWith('data:')){data[field]=await cloudUploadDataUrl(value,kind,id,field);cloudAssetPaths.set(assetKey,data[field].slice(10))}else if(storagePath){data[field]=`storage://${storagePath}`;cloudAssetPaths.set(assetKey,storagePath)}else if(cloudAssetPaths.has(assetKey))data[field]=`storage://${cloudAssetPaths.get(assetKey)}`;delete data[`${field}StoragePath`]}
-  if(kind==='character')for(const [index,v] of (data.variants||[]).entries())for(const asset of [{field:'gif',storageField:'gifStoragePath',key:'variant',label:v.name||`variant-${index+1}`},{field:'spawnImage',storageField:'spawnImageStoragePath',key:'variant-spawn',label:`${v.name||`variant-${index+1}`}-spawn`}]){const value=v[asset.field],variantKey=`${kind}:${id}:${asset.key}:${v.id||index}`;if(typeof value==='string'&&value.startsWith('data:')){v[asset.field]=await cloudUploadDataUrl(value,kind,id,asset.label);cloudAssetPaths.set(variantKey,v[asset.field].slice(10))}else if(value&&cloudAssetPaths.has(variantKey))v[asset.field]=`storage://${cloudAssetPaths.get(variantKey)}`;else if(!value)cloudAssetPaths.delete(variantKey);delete v[asset.storageField]}
+  for(const field of fields){
+    const value=data[field],storageField=`${field}StoragePath`,storedPath=data[storageField]||cloudStoragePath(value),assetKey=`${kind}:${id}:${field}`,previousPath=cloudAssetPaths.get(assetKey),explicitlyRemoved=cloudExplicitlyRemovedAssets.has(assetKey);activeAssetKeys.add(assetKey);
+    if(typeof value==='string'&&value.startsWith('data:')){data[field]=await cloudUploadDataUrl(value,kind,id,field);cloudSetAssetPath(assetKey,cloudStoragePath(data[field]),previousPath,obsoletePaths)}
+    else if(explicitlyRemoved){if(previousPath)obsoletePaths.add(previousPath);cloudAssetPaths.delete(assetKey);data[field]=''}
+    else if(storedPath){data[field]=`storage://${storedPath}`;cloudSetAssetPath(assetKey,storedPath,previousPath,obsoletePaths)}
+    else if(previousPath)data[field]=`storage://${previousPath}`;
+    delete data[storageField];cloudExplicitlyRemovedAssets.delete(assetKey);
+  }
+  if(kind==='character')for(const [index,v] of (data.variants||[]).entries())for(const asset of [{field:'gif',storageField:'gifStoragePath',key:'variant',label:v.name||`variant-${index+1}`},{field:'spawnImage',storageField:'spawnImageStoragePath',key:'variant-spawn',label:`${v.name||`variant-${index+1}`}-spawn`}]){
+    const value=v[asset.field],storedPath=v[asset.storageField]||cloudStoragePath(value),assetKey=`${kind}:${id}:${asset.key}:${v.id||index}`,previousPath=cloudAssetPaths.get(assetKey);activeAssetKeys.add(assetKey);
+    if(typeof value==='string'&&value.startsWith('data:')){v[asset.field]=await cloudUploadDataUrl(value,kind,id,asset.label);cloudSetAssetPath(assetKey,cloudStoragePath(v[asset.field]),previousPath,obsoletePaths)}
+    else if(storedPath){v[asset.field]=`storage://${storedPath}`;cloudSetAssetPath(assetKey,storedPath,previousPath,obsoletePaths)}
+    else if(previousPath)v[asset.field]=`storage://${previousPath}`;
+    delete v[asset.storageField];
+  }
   return data;
 }
 function cloudPersistSignedUrls(){
@@ -85,11 +148,15 @@ function cloudRecords(){return[{kind:'character',items:state.characters},{kind:'
 async function cloudSaveNow(force=false){
   if(!cloudReady||!['owner','editor'].includes(cloudRole)||cloudSaving)return;cloudSaving=true;cloudSetProblem('');cloudSetState('SAVING…');
   try{
-    const rows=[],current=new Set();
-    for(const group of cloudRecords())for(const item of group.items){const key=`${group.kind}:${item.id}`,data=await cloudSerialize(group.kind,item.id,item),hash=JSON.stringify(data);current.add(key);if(force||cloudHashes.get(key)!==hash){rows.push({id:String(item.id),record_type:group.kind,data,updated_by:cloudUser.id});cloudHashes.set(key,hash)}}
+    const rows=[],current=new Set(),activeAssetKeys=new Set(),obsoletePaths=new Set(),changedHashes=new Map();
+    for(const group of cloudRecords())for(const item of group.items){const key=`${group.kind}:${item.id}`;current.add(key);const data=await cloudSerialize(group.kind,item.id,item,obsoletePaths,activeAssetKeys),hash=JSON.stringify(data);if(force||cloudHashes.get(key)!==hash){rows.push({id:String(item.id),record_type:group.kind,data,updated_by:cloudUser.id});changedHashes.set(key,hash)}}
+    for(const [assetKey,path] of [...cloudAssetPaths])if(!activeAssetKeys.has(assetKey)&&[...current].some(key=>assetKey.startsWith(`${key}:`))){obsoletePaths.add(path);cloudAssetPaths.delete(assetKey)}
     if(rows.length){const {error}=await cloudClient.from('skinator_records').upsert(rows,{onConflict:'record_type,id'});if(error)throw error}
-    const removed=[...cloudRemoteKeys].filter(key=>!current.has(key));for(const key of removed){const split=key.indexOf(':'),kind=key.slice(0,split),id=key.slice(split+1),{error}=await cloudClient.from('skinator_records').delete().eq('record_type',kind).eq('id',id);if(error)throw error;cloudRemoteKeys.delete(key);cloudHashes.delete(key)}
-    current.forEach(key=>cloudRemoteKeys.add(key));const {error:plannerError}=await cloudClient.from('skinator_planner').upsert({id:'main',data:planner,updated_by:cloudUser.id},{onConflict:'id'});if(plannerError)throw plannerError;await cloudRefreshSignature();cloudSetState('ALL CHANGES SAVED',true);
+    for(const [key,hash] of changedHashes)cloudHashes.set(key,hash);
+    const removed=[...cloudRemoteKeys].filter(key=>!current.has(key));for(const key of removed){try{cloudCollectStoragePaths(JSON.parse(cloudHashes.get(key)||'{}'),obsoletePaths)}catch{}const split=key.indexOf(':'),kind=key.slice(0,split),id=key.slice(split+1),{error}=await cloudClient.from('skinator_records').delete().eq('record_type',kind).eq('id',id);if(error)throw error;for(const assetKey of [...cloudAssetPaths.keys()])if(assetKey.startsWith(`${key}:`))cloudAssetPaths.delete(assetKey);cloudRemoteKeys.delete(key);cloudHashes.delete(key)}
+    current.forEach(key=>cloudRemoteKeys.add(key));const {error:plannerError}=await cloudClient.from('skinator_planner').upsert({id:'main',data:planner,updated_by:cloudUser.id},{onConflict:'id'});if(plannerError)throw plannerError;await cloudRefreshSignature();
+    let cleanupFailed=false;if(obsoletePaths.size)try{await cloudRemoveUnreferencedPaths(obsoletePaths)}catch(cleanupError){cleanupFailed=true;console.warn('Unused cloud asset cleanup deferred',cleanupError)}
+    cloudSetState(cleanupFailed?'SAVED — CLEANUP PENDING':'ALL CHANGES SAVED',true);if(cleanupFailed)toast('CHANGES SAVED — UNUSED IMAGE CLEANUP WILL RETRY LATER');
   }catch(error){console.error(error);cloudSetProblem(error.message||'CHECK CONNECTION');cloudSetState('SYNC ERROR');toast(`CLOUD SAVE FAILED — ${error.message||'CHECK CONNECTION'}`)}finally{cloudSaving=false}
 }
 window.skinatorCloudSave=()=>{clearTimeout(cloudTimer);cloudTimer=setTimeout(()=>{cloudTimer=null;cloudSaveNow(false)},700)};
@@ -162,7 +229,7 @@ function cloudStartPresence(displayName){
 async function cloudLoad(isRefresh=false){
   cloudSetReady(false);cloudSetProblem('');cloudSetState('LOADING…');const {data:rows,error}=await cloudClient.from('skinator_records').select('id,record_type,data,updated_at');if(error)throw error;
   if(!rows.length){cloudReady=true;cloudSetReady(true);$('cloudMigrate').hidden=false;cloudSetState('READY FOR FIRST UPLOAD');return}
-  cloudRemoteKeys.clear();cloudHashes.clear();cloudAssetPaths.clear();const grouped={character:[],modifier:[],npc:[],parasyte:[],achievement:[],outreach:[],publisher:[],idea:[],idea_category:[],ongoing_task:[],task_option:[]};const hydratedRows=await cloudMapLimit(rows,8,async row=>({row,data:await cloudHydrate(row.record_type,row.data)}));for(const {row,data} of hydratedRows){const key=`${row.record_type}:${row.id}`;cloudRemoteKeys.add(key);cloudHashes.set(key,JSON.stringify(row.data));grouped[row.record_type]?.push(data)}
+  cloudRemoteKeys.clear();cloudHashes.clear();cloudAssetPaths.clear();cloudExplicitlyRemovedAssets.clear();const grouped={character:[],modifier:[],npc:[],parasyte:[],achievement:[],outreach:[],publisher:[],idea:[],idea_category:[],ongoing_task:[],task_option:[]};const hydratedRows=await cloudMapLimit(rows,8,async row=>({row,data:await cloudHydrate(row.record_type,row.data)}));for(const {row,data} of hydratedRows){const key=`${row.record_type}:${row.id}`;cloudRemoteKeys.add(key);cloudHashes.set(key,JSON.stringify(row.data));grouped[row.record_type]?.push(data)}
   const characterMigration=migrateCharacterVariants(grouped.character);state.characters=characterMigration.characters;state.modifiers=grouped.modifier;ensureSpawnModifiersInState();state.npcs=grouped.npc;parasytes=grouped.parasyte;const recoveredMissingAchievements=!grouped.achievement.length&&achievements.length;if(grouped.achievement.length)achievements=mergeAchievementSeed(grouped.achievement);localStorage.setItem(ACHIEVEMENT_KEY,JSON.stringify(achievements));
   const {data:plan,error:planError}=await cloudClient.from('skinator_planner').select('data,updated_at').eq('id','main').maybeSingle();if(planError)throw planError;if(plan?.data){Object.keys(planner).forEach(k=>delete planner[k]);Object.assign(planner,plan.data)}const influencerAnalysisWasInitialized=!!planner.influencerAnalysisInitialized,businessInitialized=!!planner.businessInitialized,categoriesInitialized=!!planner.ideaCategoriesInitialized,tasksInitialized=!!planner.ongoingTasksInitialized,optionsInitialized=!!planner.taskOptionsInitialized,needsIdeaMigration=(planner.ideaSeedRevision||0)<IDEA_SEED_REVISION,recoveredMissingBusiness=(!grouped.outreach.length&&outreachRecords.length)||(!grouped.idea.length&&ideaRecords.length)||(!grouped.idea_category.length&&ideaCategoryRecords.length)||(!grouped.ongoing_task.length&&ongoingTaskRecords.length)||(!grouped.task_option.length&&taskOptionRecords.length);if(grouped.outreach.length)outreachRecords=grouped.outreach;if(grouped.publisher.length)publisherRecords=grouped.publisher;if(grouped.idea.length)ideaRecords=grouped.idea;if(grouped.idea_category.length)ideaCategoryRecords=grouped.idea_category;if(grouped.ongoing_task.length)ongoingTaskRecords=grouped.ongoing_task;if(grouped.task_option.length)taskOptionRecords=grouped.task_option;if(needsIdeaMigration){mergeLatestIdeaSeed();planner.ideaSeedRevision=IDEA_SEED_REVISION}if(!businessInitialized)planner.businessInitialized=true;if(!categoriesInitialized)planner.ideaCategoriesInitialized=true;if(!tasksInitialized)planner.ongoingTasksInitialized=true;if(!optionsInitialized)planner.taskOptionsInitialized=true;localStorage.setItem(BUSINESS_KEY,JSON.stringify({outreach:outreachRecords,publishers:publisherRecords,ideas:ideaRecords,ideaCategories:ideaCategoryRecords,ongoingTasks:ongoingTaskRecords,taskOptions:taskOptionRecords,ideaSeedRevision:IDEA_SEED_REVISION}));const influencerAnalysisSeeded=typeof ensureInfluencerAnalysisSeed==='function'&&ensureInfluencerAnalysisSeed({persist:false});cloudRememberSignature(rows,plan?.updated_at);
   const taskSourcesChanged=typeof syncTaskSources==='function'&&syncTaskSources({persist:false});cloudReady=true;cloudRenderActiveView();cloudSetReady(true);cloudSetState('ALL CHANGES SAVED',true);toast(characterMigration.migrated?`${characterMigration.migrated} VARIANTS CONVERTED TO CHARACTERS`:(isRefresh?'TEAM CHANGES LOADED':'SHARED TRACKER LOADED'));if(!businessInitialized||!categoriesInitialized||!tasksInitialized||!optionsInitialized||!influencerAnalysisWasInitialized||influencerAnalysisSeeded||recoveredMissingBusiness||recoveredMissingAchievements||needsIdeaMigration||taskSourcesChanged||characterMigration.changed)window.skinatorCloudSave();
@@ -170,7 +237,7 @@ async function cloudLoad(isRefresh=false){
 async function cloudStart(session){
   await window.skinatorLocalReady;
   cloudUser=session.user;const {data:membership,error}=await cloudClient.from('skinator_team_members').select('role,display_name').eq('user_id',cloudUser.id).single();if(error){await cloudClient.auth.signOut();throw Error('THIS ACCOUNT IS NOT APPROVED FOR SKINATOR')}
-  const displayName=membership.display_name||'TEAM MEMBER';cloudRole=membership.role;$('cloudAuth').hidden=true;$('cloudBar').hidden=false;$('cloudIdentity').textContent=`${displayName} // ${cloudRole.toUpperCase()}`;
+  const displayName=membership.display_name||'TEAM MEMBER';cloudRole=membership.role;$('cloudAuth').hidden=true;$('cloudBar').hidden=false;$('cloudCleanup').hidden=cloudRole!=='owner';$('cloudIdentity').textContent=`${displayName} // ${cloudRole.toUpperCase()}`;
   try{await cloudWithTimeout(cloudLoad(),'SHARED DATA LOAD')}
   catch(loadError){cloudReady=false;cloudSetReady(false);cloudSetProblem(loadError.message||'CHECK CONNECTION');cloudSetState('SYNC ERROR');toast(`CLOUD LOAD FAILED — ${loadError.message||'CHECK CONNECTION'}`);throw loadError}
   cloudStartPresence(displayName);cloudScheduleFallback();
@@ -178,6 +245,7 @@ async function cloudStart(session){
 $('cloudLogin').onsubmit=async event=>{event.preventDefault();$('cloudError').textContent='SIGNING IN…';const {data,error}=await cloudClient.auth.signInWithPassword({email:$('cloudEmail').value.trim(),password:$('cloudPassword').value});if(error){$('cloudError').textContent=error.message.toUpperCase();return}try{await cloudStart(data.session)}catch(startError){$('cloudError').textContent=startError.message}};
 $('cloudLogout').onclick=async()=>{await cloudClient.auth.signOut();location.reload()};
 $('cloudRetry').onclick=()=>location.reload();
+$('cloudCleanup').onclick=cloudRunStorageCleanup;
 $('cloudUploadLocal').onclick=async()=>{if(!confirm('Upload this local tracker as the first shared Supabase database?'))return;$('cloudMigrate').hidden=true;await cloudSaveNow(true);if(cloudHashes.size)toast('LOCAL TRACKER UPLOADED TO SUPABASE')};
 
 if(!cloudClient){$('cloudError').textContent='SUPABASE CLIENT COULD NOT START';cloudSetReady(true)}else cloudClient.auth.getSession().then(async({data})=>{if(data.session)try{await cloudStart(data.session)}catch(error){$('cloudError').textContent=error.message}});
