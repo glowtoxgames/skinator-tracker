@@ -1,4 +1,5 @@
 const INFLUENCER_ANALYSIS_KEY='influencerAnalysisInitialized';
+const INFLUENCER_ANALYSIS_REVISION_KEY='influencerAnalysisDataRevision';
 const INFLUENCER_NOTE_FIELDS=[
   {key:'overall',label:'Overall Notes'},
   {key:'positive',label:'Positive Notes'},
@@ -6,26 +7,46 @@ const INFLUENCER_NOTE_FIELDS=[
   {key:'directFeedback',label:'Direct Feedback Notes'}
 ];
 let editingInfluencerCreatorId=null,editingInfluencerVideoId=null;
+let influencerViewMode='files';
+const influencerNormalize=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
+function influencerVideoIdentity(value=''){
+  try{const url=new URL(value),host=url.hostname.replace(/^www\./,'');if(host==='youtu.be')return`youtube:${url.pathname.split('/').filter(Boolean)[0]||''}`;if(host.endsWith('youtube.com'))return`youtube:${url.searchParams.get('v')||url.pathname}`;return`${url.origin}${url.pathname}`.toLowerCase()}catch{return influencerNormalize(value)}
+}
 
 function ensureInfluencerAnalysisSeed({persist=true}={}){
   if(!Array.isArray(planner.influencerCreators))planner.influencerCreators=[];
   if(!Array.isArray(planner.influencerVideos))planner.influencerVideos=[];
-  if(planner[INFLUENCER_ANALYSIS_KEY])return false;
-  planner.influencerCreators=structuredClone(INFLUENCER_ANALYSIS_SEED.creators);
-  planner.influencerVideos=structuredClone(INFLUENCER_ANALYSIS_SEED.videos);
+  const targetRevision=typeof INFLUENCER_ANALYSIS_DATA_REVISION==='number'?INFLUENCER_ANALYSIS_DATA_REVISION:1,currentRevision=Number(planner[INFLUENCER_ANALYSIS_REVISION_KEY]||0);
+  if(planner[INFLUENCER_ANALYSIS_KEY]&&currentRevision>=targetRevision)return false;
+  const creators=planner.influencerCreators,videos=planner.influencerVideos;let changed=false;
+  for(const seedCreator of INFLUENCER_ANALYSIS_SEED.creators){if(!creators.some(creator=>influencerNormalize(creator.name)===influencerNormalize(seedCreator.name))){creators.push(structuredClone(seedCreator));changed=true}}
+  for(const supplied of INFLUENCER_ANALYSIS_COMPLETE_DATA){
+    let creator=creators.find(item=>influencerNormalize(item.name)===influencerNormalize(supplied.creator));
+    if(!creator){const slug=influencerNormalize(supplied.creator).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||crypto.randomUUID();creator={id:`influencer-${slug}`,name:supplied.creator,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};creators.push(creator);changed=true}
+    const identity=influencerVideoIdentity(supplied.videoLink),seedVideo=INFLUENCER_ANALYSIS_SEED.videos.find(video=>influencerVideoIdentity(video.videoLink)===identity);
+    let video=videos.find(item=>influencerVideoIdentity(item.videoLink)===identity)||(supplied.date&&videos.find(item=>item.creatorId===creator.id&&item.date===supplied.date));
+    if(!video){video=structuredClone(seedVideo||{id:`influencer-video-${crypto.randomUUID()}`,createdAt:new Date().toISOString(),notes:{}});videos.push(video);changed=true}
+    const before=JSON.stringify(video),seedNotes=seedVideo?.notes||{},currentNotes=video.notes||{};
+    video.creatorId=creator.id;
+    for(const field of ['date','subscribers','views','videoLink'])if(String(supplied[field]||'').trim())video[field]=supplied[field];
+    video.values={...(video.values||{}),...supplied.values};
+    video.notes=Object.fromEntries(INFLUENCER_NOTE_FIELDS.map(field=>[field.key,String(currentNotes[field.key]||'').trim()?currentNotes[field.key]:(seedNotes[field.key]||'')]));
+    if(JSON.stringify(video)!==before){video.updatedAt=new Date().toISOString();changed=true}
+  }
   planner[INFLUENCER_ANALYSIS_KEY]=true;
-  if(persist&&!publishedSnapshot)savePlanner();
-  return true;
+  planner[INFLUENCER_ANALYSIS_REVISION_KEY]=targetRevision;
+  if(currentRevision!==targetRevision)changed=true;
+  if(changed&&persist&&!publishedSnapshot)savePlanner();
+  return changed;
 }
 ensureInfluencerAnalysisSeed();
 
 const influencerCreators=()=>planner.influencerCreators||[];
 const influencerVideos=()=>planner.influencerVideos||[];
-const influencerNormalize=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
 const influencerDisplayDate=value=>value?new Date(`${value}T00:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'DATE NOT SET';
 const influencerSafeLink=value=>{try{const url=new URL(value);return['http:','https:'].includes(url.protocol)?url.href:''}catch{return''}};
 const influencerNumber=value=>{const text=String(value||'').trim().toUpperCase().replaceAll(',','');const match=text.match(/^([0-9.]+)\s*([KM])?$/);if(!match)return 0;return Number(match[1])*(match[2]==='M'?1e6:match[2]==='K'?1e3:1)};
-const influencerScore=value=>{const score=Number(String(value||'').replace(/[^0-9.]/g,''));return Number.isFinite(score)&&score>=0&&score<=10?score:null};
+const influencerScore=value=>{const text=String(value||'').trim();if(!text||/^(N\/?A|SKIPPED)/i.test(text))return null;const match=text.match(/^\s*(10(?:\.0+)?|[0-9](?:\.\d+)?)\s*$/);return match?Number(match[1]):null};
 const influencerVideoAverage=video=>{const scores=INFLUENCER_VIDEO_FIELDS.filter(field=>field.group==='scores').map(field=>influencerScore(video.values?.[field.key])).filter(value=>value!==null);return scores.length?scores.reduce((sum,value)=>sum+value,0)/scores.length:null};
 
 document.querySelector('aside nav').insertAdjacentHTML('beforeend','<button class="nav" data-tab="influencerAnalysis"><i>▶</i> VIDEO ANALYSIS <span id="navInfluencerCount">0</span></button>');
@@ -49,9 +70,11 @@ document.querySelector('main').insertAdjacentHTML('beforeend',`
         <option value="videos-desc">MOST VIDEOS</option>
         <option value="date-desc">NEWEST VIDEO</option>
       </select>
+      <div class="influencer-view-switch"><button type="button" id="influencerFilesMode" class="active">CREATOR FILES</button><button type="button" id="influencerComparisonMode">DATA COMPARISON</button></div>
       <span id="influencerResultCount"></span>
     </div>
     <div id="influencerCreatorList" class="influencer-creator-list"></div>
+    <div id="influencerComparison" class="influencer-comparison" hidden></div>
     <div id="influencerEmpty" class="empty" hidden><i>▶</i><h2>NO CREATOR ANALYSIS FOUND</h2><p>Create a creator file and add their first video.</p></div>
   </section>
 </section>`);
@@ -60,7 +83,7 @@ document.body.insertAdjacentHTML('beforeend',`
 <dialog id="influencerCreatorDialog" class="influencer-creator-dialog">
   <form id="influencerCreatorForm">
     <div class="dialog-head"><div><p>INFLUENCER VIDEO ANALYSIS</p><h2 id="influencerCreatorDialogTitle">New Creator</h2></div><button type="button" class="x influencer-creator-close">×</button></div>
-    <div class="dialog-body"><label>CREATOR / YOUTUBER NAME *<input id="influencerCreatorName" required placeholder="CREATOR NAME"></label></div>
+    <div class="dialog-body"><label>CREATOR / YOUTUBER NAME *<input id="influencerCreatorName" required placeholder="CREATOR NAME"></label><label>EMAIL<input id="influencerCreatorEmail" type="email" placeholder="creator@example.com"></label></div>
     <div class="dialog-actions"><button type="button" class="btn danger" id="deleteInfluencerCreator" hidden>DELETE CREATOR</button><span></span><button type="button" class="btn ghost influencer-creator-close">CANCEL</button><button class="btn red" type="submit">SAVE CREATOR</button></div>
   </form>
 </dialog>
@@ -96,7 +119,7 @@ function influencerLatestDate(creatorId){return influencerCreatorVideos(creatorI
 function influencerMatches(creator,query){
   if(!query)return true;
   const videos=influencerCreatorVideos(creator.id);
-  return `${creator.name} ${videos.map(video=>`${video.date} ${video.subscribers} ${video.views} ${video.videoLink} ${Object.values(video.values||{}).join(' ')} ${Object.values(video.notes||{}).join(' ')}`).join(' ')}`.toLowerCase().includes(query);
+  return `${creator.name} ${creator.email||''} ${videos.map(video=>`${video.date} ${video.subscribers} ${video.views} ${video.videoLink} ${Object.values(video.values||{}).join(' ')} ${Object.values(video.notes||{}).join(' ')}`).join(' ')}`.toLowerCase().includes(query);
 }
 function influencerMetricRows(video){
   return INFLUENCER_VIDEO_FIELDS.filter(field=>String(video.values?.[field.key]||'').trim()).map(field=>`<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(video.values[field.key])}</dd></div>`).join('');
@@ -113,6 +136,75 @@ function influencerVideoCard(video,index){
     <div class="influencer-score-strip">${scores.map(field=>`<span title="${escapeHtml(field.label)}"><i>${escapeHtml(field.label)}</i><b>${escapeHtml(video.values[field.key])}</b></span>`).join('')}</div>
     <details class="influencer-analysis-details"><summary>VIEW FULL ANALYSIS <span>＋</span></summary><dl>${influencerMetricRows(video)}</dl>${influencerNotesPreview(video)}</details>
   </article>`;
+}
+function influencerCountNumber(value){const text=String(value||'').trim();if(!text||/^(N\/?A|SKIPPED|NOT)/i.test(text))return null;const numbers=(text.match(/\d+(?:\.\d+)?/g)||[]).map(Number);if(!numbers.length)return null;return numbers.length>1&&text.includes('-')?(numbers[0]+numbers[1])/2:numbers[0]}
+function influencerCompactNumber(value){if(value===null||!Number.isFinite(value))return'—';return new Intl.NumberFormat(undefined,{notation:value>=1000?'compact':'standard',maximumFractionDigits:1}).format(value)}
+function influencerTimeSeconds(value){
+  const text=String(value||'').trim();
+  if(!text||/N\/?A|SKIPPED|NOT (?:REACHED|OBSERVED|CALCULATED)|NONE|^NO$/i.test(text))return null;
+  const match=text.match(/(\d{1,3}):(\d{2})(?::(\d{2}))?/);if(!match)return null;
+  const first=Number(match[1]),second=Number(match[2]),third=match[3]===undefined?null:Number(match[3]);
+  if(second>=60||(third!==null&&third>=60))return null;
+  if(third===null)return first*60+second;
+  return first>=10&&third===0?first*60+second:first*3600+second*60+third;
+}
+function influencerFormatTime(seconds){
+  if(seconds===null||!Number.isFinite(seconds))return'—';
+  const rounded=Math.round(seconds),hours=Math.floor(rounded/3600),minutes=Math.floor(rounded%3600/60),secs=rounded%60;
+  return hours?`${hours}:${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`:`${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+function influencerEventState(value){
+  const text=String(value||'').trim();
+  if(!text||/N\/?A|SKIPPED|NOT (?:REACHED|OBSERVED|CALCULATED)/i.test(text))return null;
+  if(/^(NO|NONE)$/i.test(text))return false;
+  if(/^(YES|IMPLICIT YES)$/i.test(text)||influencerTimeSeconds(text)!==null)return true;
+  return null;
+}
+const INFLUENCER_COMPARISON_GROUPS=[
+  {key:'video',label:'VIDEO & REACH',rows:['date','subscribers','views','videoLink']},
+  {key:'tutorial',label:'TUTORIAL INFO',rows:['tutorialClarity','startsTutorial','finishesTutorial','tutorialDuration','firstCombatAfterTutorial']},
+  {key:'gameplay',label:'OVERALL GAME INFO',rows:['combatUnderstanding','modifierUnderstanding','strategicDepthPerceived','totalFights','playsSecondRound','firstUnderstandingMoment','firstConfusionEvent','firstStrategicInsight','firstBuildModification']},
+  {key:'loot',label:'LOOT & PROGRESSION',rows:['lootExcitement','firstPartAcquired','firstLootChosen','firstShopEncounter','firstPotionEncounter','firstCorpseMongerEncounter']},
+  {key:'encounters',label:'CHARACTERS & ENCOUNTERS',rows:['wanderingMonkEncounter','monkDies','oborogumoEncounter','templePriestEncounter','finalBossEncounter']},
+  {key:'feelings',label:'OVERALL PLAYER FEELINGS',rows:['overallEnjoyment','replayIntent','saysGameIsFun','saysWouldPlayAgain','firstExcitementSpike','firstCriticism','firstGameIsEasyComment']},
+  {key:'ending',label:'VIDEO END',rows:['videoEnds']}
+];
+const INFLUENCER_EVENT_LABELS={
+  startsTutorial:'STARTED',finishesTutorial:'FINISHED',firstCombatAfterTutorial:'REACHED COMBAT',firstPartAcquired:'ACQUIRED',firstShopEncounter:'ENCOUNTERED',firstPotionEncounter:'ENCOUNTERED',firstCorpseMongerEncounter:'ENCOUNTERED',wanderingMonkEncounter:'ENCOUNTERED',monkDies:'DIED',oborogumoEncounter:'ENCOUNTERED',templePriestEncounter:'ENCOUNTERED',finalBossEncounter:'ENCOUNTERED',saysGameIsFun:'POSITIVE',saysWouldPlayAgain:'WOULD PLAY AGAIN',playsSecondRound:'PLAYED SECOND ROUND',firstUnderstandingMoment:'UNDERSTOOD',firstConfusionEvent:'CONFUSED',firstStrategicInsight:'STRATEGIC INSIGHT',firstBuildModification:'MODIFIED BUILD',firstExcitementSpike:'EXCITEMENT',firstCriticism:'CRITICISED',firstGameIsEasyComment:'SAID GAME IS EASY',firstLootChosen:'CHOSE LOOT',videoEnds:'ENDED'
+};
+function influencerComparisonRows(){
+  const fieldMap=new Map(INFLUENCER_VIDEO_FIELDS.map(field=>[field.key,field])),rows=new Map([
+    ['date',{key:'date',label:'Video date',raw:video=>influencerDisplayDate(video.date)}],
+    ['subscribers',{key:'subscribers',label:'Subscribers',raw:video=>video.subscribers||'—',numeric:video=>{const value=influencerNumber(video.subscribers);return value>0?value:null},format:influencerCompactNumber}],
+    ['views',{key:'views',label:'Video views',raw:video=>video.views||'—',numeric:video=>{const value=influencerNumber(video.views);return value>0?value:null},format:influencerCompactNumber}],
+    ['videoLink',{key:'videoLink',label:'Video link',raw:video=>video.videoLink||'—',link:true}]
+  ]);
+  for(const field of INFLUENCER_VIDEO_FIELDS){
+    const row={key:field.key,label:field.label,raw:video=>video.values?.[field.key]||'—'};
+    if(field.group==='scores'){row.numeric=video=>influencerScore(video.values?.[field.key]);row.format=value=>Number.isInteger(value)?String(value):value.toFixed(1)}
+    else if(field.key==='totalFights'){row.numeric=video=>influencerCountNumber(video.values?.[field.key]);row.format=value=>Number.isInteger(value)?String(value):value.toFixed(1)}
+    else if(field.group==='timeline'){row.time=video=>influencerTimeSeconds(video.values?.[field.key]);row.format=influencerFormatTime}
+    if(INFLUENCER_EVENT_LABELS[field.key]){row.event=video=>influencerEventState(video.values?.[field.key]);row.eventLabel=INFLUENCER_EVENT_LABELS[field.key]}
+    rows.set(field.key,row);
+  }
+  return INFLUENCER_COMPARISON_GROUPS.map(group=>({...group,rows:group.rows.map(key=>rows.get(key)||fieldMap.get(key)).filter(Boolean)}));
+}
+function influencerComparisonSummary(row,videos){
+  const numbers=row.numeric?videos.map(row.numeric).filter(value=>value!==null&&Number.isFinite(value)):[],times=row.time?videos.map(row.time).filter(value=>value!==null&&Number.isFinite(value)):[];
+  if(numbers.length){const format=row.format||influencerCompactNumber,average=numbers.reduce((sum,value)=>sum+value,0)/numbers.length;return[format(average),format(Math.min(...numbers)),format(Math.max(...numbers))]}
+  const events=row.event?videos.map(row.event).filter(value=>value!==null):[],averageParts=[];
+  if(events.length)averageParts.push(`${row.eventLabel} ${Math.round(events.filter(Boolean).length/events.length*100)}%`);
+  if(times.length)averageParts.push(`AVG ${influencerFormatTime(times.reduce((sum,value)=>sum+value,0)/times.length)}`);
+  if(!averageParts.length&&videos.some(video=>/^not calculated$/i.test(String(row.raw(video)||'').trim())))averageParts.push('NOT CALCULATED');
+  return[averageParts.join(' // ')||'—',times.length?influencerFormatTime(Math.min(...times)):'—',times.length?influencerFormatTime(Math.max(...times)):'—'];
+}
+function renderInfluencerComparison(creators){
+  const videos=creators.flatMap(creator=>influencerCreatorVideos(creator.id).map(video=>({video,creator}))).sort((left,right)=>left.creator.name.localeCompare(right.creator.name,undefined,{sensitivity:'base'})||(left.video.date||'').localeCompare(right.video.date||''));
+  const target=$('influencerComparison');if(!videos.length){target.innerHTML='<div class="business-empty">NO VIDEOS MATCH THIS FILTER</div>';return}
+  const rawVideos=videos.map(item=>item.video),allScoreValues=rawVideos.flatMap(video=>INFLUENCER_VIDEO_FIELDS.filter(field=>field.group==='scores').map(field=>influencerScore(video.values?.[field.key]))).filter(value=>value!==null),views=rawVideos.map(video=>influencerNumber(video.views)).filter(value=>value>0),filled=rawVideos.reduce((sum,video)=>sum+INFLUENCER_VIDEO_FIELDS.filter(field=>String(video.values?.[field.key]||'').trim()).length,0),possible=rawVideos.length*INFLUENCER_VIDEO_FIELDS.length;
+  const metricGroups=influencerComparisonRows(),columnCount=videos.length+3;
+  const rowHtml=row=>{const summary=influencerComparisonSummary(row,rawVideos);return`<tr data-group="${row.key}"><th>${escapeHtml(row.label)}</th>${rawVideos.map(video=>{const raw=row.raw(video),link=row.link?influencerSafeLink(raw):'';return`<td>${link?`<a href="${escapeHtml(link)}" target="_blank" rel="noopener">WATCH ↗</a>`:escapeHtml(raw)}</td>`}).join('')}<td class="comparison-summary-cell">${escapeHtml(summary[0])}</td><td class="comparison-summary-cell">${escapeHtml(summary[1])}</td><td class="comparison-summary-cell">${escapeHtml(summary[2])}</td></tr>`};
+  target.innerHTML=`<div class="influencer-comparison-summary"><article><small>VIDEOS COMPARED</small><b>${videos.length}</b></article><article><small>AVERAGE SCORE</small><b>${allScoreValues.length?(allScoreValues.reduce((sum,value)=>sum+value,0)/allScoreValues.length).toFixed(1):'—'}</b></article><article><small>AVERAGE VIEWS</small><b>${views.length?influencerCompactNumber(views.reduce((sum,value)=>sum+value,0)/views.length):'—'}</b></article><article><small>DATA COMPLETENESS</small><b>${possible?Math.round(filled/possible*100):0}%</b></article></div><div class="influencer-comparison-scroll"><table><thead><tr><th class="comparison-field-head">METRIC</th>${videos.map(({video,creator})=>`<th><small>${escapeHtml(creator.name)}</small><b>${escapeHtml(influencerDisplayDate(video.date).toUpperCase())}</b><span>${escapeHtml(video.views||'—')} VIEWS</span></th>`).join('')}<th class="comparison-summary-head">AVERAGE / RATE</th><th class="comparison-summary-head">MIN / EARLIEST</th><th class="comparison-summary-head">MAX / LATEST</th></tr></thead><tbody>${metricGroups.map((group,index)=>`<tr class="influencer-comparison-group"><th>${String(index+1).padStart(2,'0')} // ${escapeHtml(group.label)}</th><td colspan="${columnCount}"></td></tr>${group.rows.map(rowHtml).join('')}`).join('')}</tbody></table></div>`;
 }
 function renderInfluencerAnalysis(){
   ensureInfluencerAnalysisSeed({persist:false});
@@ -131,10 +223,16 @@ function renderInfluencerAnalysis(){
   $('influencerEnjoymentAverage').textContent=enjoymentScores.length?(enjoymentScores.reduce((sum,value)=>sum+value,0)/enjoymentScores.length).toFixed(1):'—';
   $('influencerResultCount').textContent=`${rows.length} CREATOR${rows.length===1?'':'S'} // ${rows.reduce((sum,creator)=>sum+influencerCreatorVideos(creator.id).length,0)} VIDEOS`;
   $('influencerEmpty').hidden=rows.length>0;
+  const comparisonMode=influencerViewMode==='comparison';
+  $('influencerFilesMode').classList.toggle('active',!comparisonMode);
+  $('influencerComparisonMode').classList.toggle('active',comparisonMode);
+  $('influencerCreatorList').hidden=comparisonMode;
+  $('influencerComparison').hidden=!comparisonMode;
+  if(comparisonMode)renderInfluencerComparison(rows);
   $('influencerCreatorList').innerHTML=rows.map(creator=>{
     const creatorVideos=influencerCreatorVideos(creator.id).sort((left,right)=>(right.date||'').localeCompare(left.date||''));
     const latest=creatorVideos[0]?.date||'';
-    return `<details class="influencer-creator-card" open data-creator-id="${creator.id}"><summary><span class="influencer-avatar">${escapeHtml((creator.name||'?').trim().charAt(0).toUpperCase())}</span><div><small>CREATOR ANALYSIS FILE</small><h2>${escapeHtml(creator.name)}</h2><p>${creatorVideos.length} VIDEO${creatorVideos.length===1?'':'S'}${latest?` // LATEST ${escapeHtml(influencerDisplayDate(latest).toUpperCase())}`:''}</p></div><span class="influencer-collapse">⌄</span></summary><div class="influencer-creator-actions"><button type="button" data-add-influencer-video="${creator.id}">＋ ADD VIDEO</button><button type="button" data-edit-influencer-creator="${creator.id}">EDIT CREATOR</button></div><div class="influencer-video-list">${creatorVideos.length?creatorVideos.map(influencerVideoCard).join(''):'<div class="influencer-video-empty">NO VIDEOS YET // ADD THE FIRST ANALYSIS</div>'}</div></details>`;
+    return `<details class="influencer-creator-card" open data-creator-id="${creator.id}"><summary><span class="influencer-avatar">${escapeHtml((creator.name||'?').trim().charAt(0).toUpperCase())}</span><div><small>CREATOR ANALYSIS FILE</small><h2>${escapeHtml(creator.name)}</h2><p>${creatorVideos.length} VIDEO${creatorVideos.length===1?'':'S'}${latest?` // LATEST ${escapeHtml(influencerDisplayDate(latest).toUpperCase())}`:''}</p><p class="influencer-creator-email">EMAIL // ${escapeHtml(creator.email||'NOT ADDED')}</p></div><span class="influencer-collapse">⌄</span></summary><div class="influencer-creator-actions"><button type="button" data-add-influencer-video="${creator.id}">＋ ADD VIDEO</button><button type="button" data-edit-influencer-creator="${creator.id}">EDIT CREATOR</button></div><div class="influencer-video-list">${creatorVideos.length?creatorVideos.map(influencerVideoCard).join(''):'<div class="influencer-video-empty">NO VIDEOS YET // ADD THE FIRST ANALYSIS</div>'}</div></details>`;
   }).join('');
   document.querySelectorAll('[data-add-influencer-video]').forEach(button=>button.onclick=()=>openInfluencerVideo(null,button.dataset.addInfluencerVideo));
   document.querySelectorAll('[data-edit-influencer-creator]').forEach(button=>button.onclick=()=>openInfluencerCreator(button.dataset.editInfluencerCreator));
@@ -148,6 +246,7 @@ function openInfluencerCreator(id=null){
   $('influencerCreatorForm').reset();
   $('influencerCreatorDialogTitle').textContent=creator?'Edit Creator':'New Creator';
   $('influencerCreatorName').value=creator?.name||'';
+  $('influencerCreatorEmail').value=creator?.email||'';
   $('deleteInfluencerCreator').hidden=!creator;
   $('influencerCreatorDialog').showModal();
   $('influencerCreatorName').focus();
@@ -172,6 +271,8 @@ function openInfluencerVideo(id=null,creatorId=''){
 
 $('influencerSearch').oninput=renderInfluencerAnalysis;
 $('influencerSort').onchange=renderInfluencerAnalysis;
+$('influencerFilesMode').onclick=()=>{influencerViewMode='files';renderInfluencerAnalysis()};
+$('influencerComparisonMode').onclick=()=>{influencerViewMode='comparison';renderInfluencerAnalysis()};
 document.querySelectorAll('.influencer-creator-close').forEach(button=>button.onclick=()=>$('influencerCreatorDialog').close());
 document.querySelectorAll('.influencer-video-close').forEach(button=>button.onclick=()=>$('influencerVideoDialog').close());
 $('influencerCreatorForm').onsubmit=event=>{
@@ -180,7 +281,7 @@ $('influencerCreatorForm').onsubmit=event=>{
   const name=$('influencerCreatorName').value.trim(),duplicate=influencerCreators().find(creator=>creator.id!==editingInfluencerCreatorId&&influencerNormalize(creator.name)===influencerNormalize(name));
   if(duplicate)return toast('THAT CREATOR ALREADY EXISTS');
   const existing=influencerCreators().find(creator=>creator.id===editingInfluencerCreatorId),now=new Date().toISOString(),record=existing||{id:`influencer-${crypto.randomUUID()}`,createdAt:now};
-  record.name=name;record.updatedAt=now;
+  record.name=name;record.email=$('influencerCreatorEmail').value.trim();record.updatedAt=now;
   if(!existing)planner.influencerCreators=[record,...influencerCreators()];
   saveInfluencerAnalysis();renderInfluencerAnalysis();$('influencerCreatorDialog').close();toast(existing?'CREATOR UPDATED':'CREATOR CREATED');
 };

@@ -158,6 +158,11 @@ const INFLUENCER_VIDEO_FIELDS=[
     "key": "firstCorpseMongerEncounter",
     "label": "First corpse monger encounter",
     "group": "timeline"
+  },
+  {
+    "key": "playsSecondRound",
+    "label": "Plays a second round",
+    "group": "session"
   }
 ];
 const INFLUENCER_ANALYSIS_SEED={

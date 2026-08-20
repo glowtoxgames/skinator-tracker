@@ -1,0 +1,251 @@
+.influencer-view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #30333a;
+  border-radius: 9px;
+  background: #101216;
+}
+
+.influencer-view-switch button {
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 12px;
+  background: transparent;
+  color: #777b82;
+  font: 750 9px inherit;
+  letter-spacing: .09em;
+  cursor: pointer;
+}
+
+.influencer-view-switch button:hover {
+  color: #f3f3f2;
+  background: #1d2025;
+}
+
+.influencer-view-switch button.active {
+  color: #fff;
+  background: linear-gradient(145deg, #dd3039, #861a22);
+  box-shadow: 0 5px 16px #c51d2640;
+}
+
+.influencer-creator-card summary .influencer-creator-email {
+  margin-top: 7px;
+  color: #b8bbc1;
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+
+.influencer-creator-card summary .influencer-creator-email::first-line {
+  color: #e85a61;
+}
+
+.influencer-comparison {
+  min-width: 0;
+  padding: 18px;
+}
+
+.influencer-comparison-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.influencer-comparison-summary article {
+  min-height: 82px;
+  padding: 14px 16px;
+  border: 1px solid #30333a;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #191b20, #111317);
+}
+
+.influencer-comparison-summary small {
+  display: block;
+  color: #72767d;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .11em;
+}
+
+.influencer-comparison-summary b {
+  display: block;
+  margin-top: 8px;
+  color: #fff;
+  font: 400 27px Georgia, serif;
+}
+
+.influencer-comparison-scroll {
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+  border: 1px solid #30333a;
+  border-radius: 12px;
+  background: #111317;
+  scrollbar-color: #5c252a #15171b;
+}
+
+.influencer-comparison table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.influencer-comparison th,
+.influencer-comparison td {
+  min-width: 155px;
+  max-width: 230px;
+  padding: 11px 13px;
+  border-right: 1px solid #2a2d33;
+  border-bottom: 1px solid #2a2d33;
+  color: #c4c7cc;
+  font-size: 11px;
+  line-height: 1.4;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.influencer-comparison thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 76px;
+  background: linear-gradient(180deg, #281317, #17191e);
+  text-align: left;
+  box-shadow: 0 1px 0 #3a3033;
+}
+
+.influencer-comparison thead th small,
+.influencer-comparison thead th b,
+.influencer-comparison thead th span {
+  display: block;
+}
+
+.influencer-comparison thead th small {
+  color: #ff636a;
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+
+.influencer-comparison thead th b {
+  margin-top: 5px;
+  color: #f0f0ef;
+  font-size: 11px;
+}
+
+.influencer-comparison thead th span {
+  margin-top: 4px;
+  color: #777b82;
+  font-size: 8px;
+}
+
+.influencer-comparison tbody th,
+.influencer-comparison .comparison-field-head {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 225px;
+  max-width: 225px;
+  color: #ececeb;
+  background: #191b20;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: .04em;
+  box-shadow: 1px 0 0 #383b42;
+}
+
+.influencer-comparison .comparison-field-head {
+  z-index: 5;
+  color: #ff636a;
+  letter-spacing: .1em;
+}
+
+.influencer-comparison tbody tr[data-group="scores"] th {
+  border-left: 3px solid #df343d;
+}
+
+.influencer-comparison tbody tr[data-group="session"] th {
+  border-left: 3px solid #d69d2f;
+}
+
+.influencer-comparison tbody tr[data-group="timeline"] th {
+  border-left: 3px solid #4b859d;
+}
+
+.influencer-comparison tbody tr:hover td,
+.influencer-comparison tbody tr:hover th {
+  background-color: #202329;
+}
+
+.influencer-comparison-group th,
+.influencer-comparison-group td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom-color: #5c272c;
+  background: linear-gradient(90deg, #35161b, #211418);
+}
+
+.influencer-comparison-group th {
+  z-index: 4;
+  max-width: 225px;
+  color: #ff676e;
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+
+.influencer-comparison-group td {
+  color: transparent;
+}
+
+.influencer-comparison a {
+  color: #ff636a;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-decoration: none;
+}
+
+.influencer-comparison .comparison-summary-head,
+.influencer-comparison .comparison-summary-cell {
+  min-width: 100px;
+  max-width: 110px;
+  color: #ffe0e1;
+  background: #211418;
+  text-align: center;
+  font-weight: 750;
+}
+
+.influencer-comparison .comparison-summary-cell {
+  min-width: 145px;
+  max-width: 180px;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .influencer-comparison-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .influencer-comparison-scroll {
+    max-height: calc(100vh - 380px);
+  }
+}
+
+@media (max-width: 620px) {
+  .influencer-view-switch {
+    width: 100%;
+  }
+
+  .influencer-view-switch button {
+    flex: 1;
+  }
+
+  .influencer-comparison-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .influencer-comparison {
+    padding: 8px;
+  }
+}
