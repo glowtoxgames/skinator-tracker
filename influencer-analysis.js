@@ -23,15 +23,21 @@ function ensureInfluencerAnalysisSeed({persist=true}={}){
   for(const supplied of INFLUENCER_ANALYSIS_COMPLETE_DATA){
     let creator=creators.find(item=>influencerNormalize(item.name)===influencerNormalize(supplied.creator));
     if(!creator){const slug=influencerNormalize(supplied.creator).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||crypto.randomUUID();creator={id:`influencer-${slug}`,name:supplied.creator,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};creators.push(creator);changed=true}
-    const identity=influencerVideoIdentity(supplied.videoLink),seedVideo=INFLUENCER_ANALYSIS_SEED.videos.find(video=>influencerVideoIdentity(video.videoLink)===identity);
-    let video=videos.find(item=>influencerVideoIdentity(item.videoLink)===identity)||(supplied.date&&videos.find(item=>item.creatorId===creator.id&&item.date===supplied.date));
-    if(!video){video=structuredClone(seedVideo||{id:`influencer-video-${crypto.randomUUID()}`,createdAt:new Date().toISOString(),notes:{}});videos.push(video);changed=true}
-    const before=JSON.stringify(video),seedNotes=seedVideo?.notes||{},currentNotes=video.notes||{};
+    const identity=influencerVideoIdentity(supplied.videoLink),seedVideo=identity?INFLUENCER_ANALYSIS_SEED.videos.find(video=>influencerVideoIdentity(video.videoLink)===identity):null;
+    let video=(identity&&videos.find(item=>influencerVideoIdentity(item.videoLink)===identity))||(supplied.date&&videos.find(item=>item.creatorId===creator.id&&item.date===supplied.date));
+    if(!video){video=structuredClone(seedVideo||{id:`influencer-video-${crypto.randomUUID()}`,date:'',subscribers:'',views:'',videoLink:'',createdAt:new Date().toISOString(),notes:{}});videos.push(video);changed=true}
+    const before=JSON.stringify(video),seedNotes=seedVideo?.notes||{},suppliedNotes=supplied.notes||{},currentNotes=video.notes||{};
     video.creatorId=creator.id;
     for(const field of ['date','subscribers','views','videoLink'])if(String(supplied[field]||'').trim())video[field]=supplied[field];
     video.values={...(video.values||{}),...supplied.values};
-    video.notes=Object.fromEntries(INFLUENCER_NOTE_FIELDS.map(field=>[field.key,String(currentNotes[field.key]||'').trim()?currentNotes[field.key]:(seedNotes[field.key]||'')]));
+    video.notes=Object.fromEntries(INFLUENCER_NOTE_FIELDS.map(field=>[field.key,String(currentNotes[field.key]||'').trim()?currentNotes[field.key]:(suppliedNotes[field.key]||seedNotes[field.key]||'')]));
     if(JSON.stringify(video)!==before){video.updatedAt=new Date().toISOString();changed=true}
+  }
+  if(typeof INFLUENCER_ANALYSIS_CREATOR_EMAILS==='object'&&INFLUENCER_ANALYSIS_CREATOR_EMAILS){
+    for(const [creatorName,email] of Object.entries(INFLUENCER_ANALYSIS_CREATOR_EMAILS)){
+      const creator=creators.find(item=>influencerNormalize(item.name)===influencerNormalize(creatorName));
+      if(creator&&email&&creator.email!==email){creator.email=email;creator.updatedAt=new Date().toISOString();changed=true}
+    }
   }
   planner[INFLUENCER_ANALYSIS_KEY]=true;
   planner[INFLUENCER_ANALYSIS_REVISION_KEY]=targetRevision;
