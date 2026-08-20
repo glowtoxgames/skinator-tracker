@@ -76,11 +76,22 @@ document.querySelector('main').insertAdjacentHTML('beforeend',`
         <option value="videos-desc">MOST VIDEOS</option>
         <option value="date-desc">NEWEST VIDEO</option>
       </select>
-      <div class="influencer-view-switch"><button type="button" id="influencerFilesMode" class="active">CREATOR FILES</button><button type="button" id="influencerComparisonMode">DATA COMPARISON</button></div>
+      <div class="influencer-view-switch"><button type="button" id="influencerFilesMode" class="active">CREATOR FILES</button><button type="button" id="influencerComparisonMode">DATA COMPARISON</button><button type="button" id="influencerGraphsMode">GRAPHS</button></div>
       <span id="influencerResultCount"></span>
     </div>
     <div id="influencerCreatorList" class="influencer-creator-list"></div>
     <div id="influencerComparison" class="influencer-comparison" hidden></div>
+    <div id="influencerGraphs" class="influencer-graphs" hidden>
+      <div class="influencer-graph-toolbar">
+        <label>CREATOR<select id="influencerGraphCreator"><option value="">ALL CREATORS</option></select></label>
+        <label>FROM<input id="influencerGraphDateFrom" type="date"></label>
+        <label>TO<input id="influencerGraphDateTo" type="date"></label>
+        <label>SUMMARY<select id="influencerGraphAggregate"><option value="average">AVERAGE</option><option value="median">MEDIAN</option></select></label>
+        <button type="button" id="influencerGraphClear">CLEAR FILTERS</button>
+      </div>
+      <div id="influencerGraphSummary" class="influencer-graph-summary"></div>
+      <div id="influencerGraphGrid" class="influencer-graph-grid"></div>
+    </div>
     <div id="influencerEmpty" class="empty" hidden><i>▶</i><h2>NO CREATOR ANALYSIS FOUND</h2><p>Create a creator file and add their first video.</p></div>
   </section>
 </section>`);
@@ -212,6 +223,69 @@ function renderInfluencerComparison(creators){
   const rowHtml=row=>{const summary=influencerComparisonSummary(row,rawVideos);return`<tr data-group="${row.key}"><th>${escapeHtml(row.label)}</th>${rawVideos.map(video=>{const raw=row.raw(video),link=row.link?influencerSafeLink(raw):'';return`<td>${link?`<a href="${escapeHtml(link)}" target="_blank" rel="noopener">WATCH ↗</a>`:escapeHtml(raw)}</td>`}).join('')}<td class="comparison-summary-cell">${escapeHtml(summary[0])}</td><td class="comparison-summary-cell">${escapeHtml(summary[1])}</td><td class="comparison-summary-cell">${escapeHtml(summary[2])}</td></tr>`};
   target.innerHTML=`<div class="influencer-comparison-summary"><article><small>VIDEOS COMPARED</small><b>${videos.length}</b></article><article><small>AVERAGE SCORE</small><b>${allScoreValues.length?(allScoreValues.reduce((sum,value)=>sum+value,0)/allScoreValues.length).toFixed(1):'—'}</b></article><article><small>AVERAGE VIEWS</small><b>${views.length?influencerCompactNumber(views.reduce((sum,value)=>sum+value,0)/views.length):'—'}</b></article><article><small>DATA COMPLETENESS</small><b>${possible?Math.round(filled/possible*100):0}%</b></article></div><div class="influencer-comparison-scroll"><table><thead><tr><th class="comparison-field-head">METRIC</th>${videos.map(({video,creator})=>`<th><small>${escapeHtml(creator.name)}</small><b>${escapeHtml(influencerDisplayDate(video.date).toUpperCase())}</b><span>${escapeHtml(video.views||'—')} VIEWS</span></th>`).join('')}<th class="comparison-summary-head">AVERAGE / RATE</th><th class="comparison-summary-head">MIN / EARLIEST</th><th class="comparison-summary-head">MAX / LATEST</th></tr></thead><tbody>${metricGroups.map((group,index)=>`<tr class="influencer-comparison-group"><th>${String(index+1).padStart(2,'0')} // ${escapeHtml(group.label)}</th><td colspan="${columnCount}"></td></tr>${group.rows.map(rowHtml).join('')}`).join('')}</tbody></table></div>`;
 }
+
+const INFLUENCER_GRAPH_SCORE_KEYS=['tutorialClarity','combatUnderstanding','modifierUnderstanding','lootExcitement','strategicDepthPerceived','overallEnjoyment','replayIntent'];
+const INFLUENCER_GRAPH_TIMELINE=[
+  ['startsTutorial','Tutorial start'],['finishesTutorial','Tutorial finish'],['firstCombatAfterTutorial','First combat'],['firstPartAcquired','First part'],['firstLootChosen','First loot'],['firstBuildModification','First build change'],['firstShopEncounter','Shop'],['wanderingMonkEncounter','Wandering Monk'],['firstCorpseMongerEncounter','Corpse Monger'],['templePriestEncounter','Temple Priest'],['finalBossEncounter','Final boss']
+];
+const influencerGraphCentral=(values,mode='average')=>{
+  const clean=values.filter(value=>value!==null&&Number.isFinite(value)).sort((a,b)=>a-b);if(!clean.length)return null;
+  if(mode==='median'){const middle=Math.floor(clean.length/2);return clean.length%2?clean[middle]:(clean[middle-1]+clean[middle])/2}
+  return clean.reduce((sum,value)=>sum+value,0)/clean.length;
+};
+function influencerGraphRows(creators){
+  const creatorId=$('influencerGraphCreator')?.value||'',from=$('influencerGraphDateFrom')?.value||'',to=$('influencerGraphDateTo')?.value||'';
+  return creators.filter(creator=>!creatorId||creator.id===creatorId).flatMap(creator=>influencerCreatorVideos(creator.id).filter(video=>(!from||video.date>=from)&&(!to||video.date<=to)).map(video=>({creator,video})));
+}
+function influencerGraphEmpty(title,message){return`<article class="influencer-graph-card"><header><div><small>VIDEO ANALYSIS</small><h3>${escapeHtml(title)}</h3></div></header><div class="influencer-graph-empty">${escapeHtml(message)}</div></article>`}
+function influencerUnderstandingBubble(rows){
+  const points=rows.map(({creator,video})=>{const understanding=influencerGraphCentral(['tutorialClarity','combatUnderstanding','modifierUnderstanding'].map(key=>influencerScore(video.values?.[key]))),enjoyment=influencerScore(video.values?.overallEnjoyment),replay=influencerScore(video.values?.replayIntent),fights=influencerCountNumber(video.values?.totalFights);return{creator,video,understanding,enjoyment,replay,fights}}).filter(point=>point.understanding!==null&&point.enjoyment!==null);
+  if(!points.length)return influencerGraphEmpty('UNDERSTANDING VS ENJOYMENT','NO VIDEOS HAVE BOTH UNDERSTANDING AND ENJOYMENT SCORES IN THIS FILTER.');
+  const width=760,height=390,left=58,right=22,top=24,bottom=52,x=value=>left+(Math.max(1,Math.min(10,value))-1)/(10-1)*(width-left-right),y=value=>top+(10-Math.max(1,Math.min(10,value)))/(10-1)*(height-top-bottom),ticks=[1,3,5,7,9];
+  const color=replay=>replay===null?'#7b8088':replay>=7?'#43c777':replay>=4?'#efb53d':'#ef454d';
+  return`<article class="influencer-graph-card influencer-graph-wide"><header><div><small>RELATIONSHIP</small><h3>UNDERSTANDING VS ENJOYMENT</h3></div><p>BUBBLE SIZE = TOTAL FIGHTS // COLOR = REPLAY INTENT</p></header><div class="influencer-svg-wrap"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Scatter plot comparing understanding and enjoyment scores">
+    ${ticks.map(tick=>`<line x1="${x(tick)}" y1="${top}" x2="${x(tick)}" y2="${height-bottom}" class="graph-grid-line"/><text x="${x(tick)}" y="${height-24}" class="graph-axis-label" text-anchor="middle">${tick}</text>`).join('')}
+    ${ticks.map(tick=>`<line x1="${left}" y1="${y(tick)}" x2="${width-right}" y2="${y(tick)}" class="graph-grid-line"/><text x="${left-16}" y="${y(tick)+4}" class="graph-axis-label" text-anchor="end">${tick}</text>`).join('')}
+    <line x1="${left}" y1="${height-bottom}" x2="${width-right}" y2="${height-bottom}" class="graph-axis"/><line x1="${left}" y1="${top}" x2="${left}" y2="${height-bottom}" class="graph-axis"/>
+    <text x="${(left+width-right)/2}" y="${height-5}" class="graph-axis-title" text-anchor="middle">UNDERSTANDING SCORE</text><text x="14" y="${height/2}" class="graph-axis-title" text-anchor="middle" transform="rotate(-90 14 ${height/2})">ENJOYMENT</text>
+    ${points.map(point=>{const radius=Math.max(8,Math.min(23,8+Math.sqrt(point.fights||1)*2.7));return`<circle cx="${x(point.understanding)}" cy="${y(point.enjoyment)}" r="${radius}" fill="${color(point.replay)}" fill-opacity=".72" stroke="${color(point.replay)}" stroke-width="2"><title>${escapeHtml(point.creator.name)} // ${escapeHtml(influencerDisplayDate(point.video.date))}\nUnderstanding ${point.understanding.toFixed(1)} // Enjoyment ${point.enjoyment}\n${point.fights||'—'} fights // Replay ${point.replay??'N/A'}</title></circle>`}).join('')}
+  </svg></div><div class="influencer-graph-legend"><span class="positive">HIGH REPLAY</span><span class="mixed">MIXED REPLAY</span><span class="negative">LOW REPLAY</span><span class="unknown">N/A</span></div></article>`;
+}
+function influencerScoreBars(rows,mode){
+  const fieldMap=new Map(INFLUENCER_VIDEO_FIELDS.map(field=>[field.key,field.label])),data=INFLUENCER_GRAPH_SCORE_KEYS.map(key=>{const values=rows.map(({video})=>influencerScore(video.values?.[key])).filter(value=>value!==null);return{key,label:fieldMap.get(key)||key,values,value:influencerGraphCentral(values,mode)}});
+  if(!data.some(item=>item.value!==null))return influencerGraphEmpty('PLAYER SCORE PROFILE','NO NUMERIC SCORES ARE AVAILABLE IN THIS FILTER.');
+  return`<article class="influencer-graph-card"><header><div><small>${mode.toUpperCase()} + RANGE</small><h3>PLAYER SCORE PROFILE</h3></div><p>VALID 1–10 SCORES ONLY</p></header><div class="influencer-score-bars">${data.map(item=>{if(item.value===null)return`<div class="score-bar-row"><span>${escapeHtml(item.label)}</span><i class="empty">NO DATA</i></div>`;const min=Math.min(...item.values),max=Math.max(...item.values);return`<div class="score-bar-row"><span>${escapeHtml(item.label)}</span><div class="score-bar-track"><i style="width:${item.value*10}%"></i><em style="left:${min*10}%;width:${Math.max(1,(max-min)*10)}%"></em></div><b>${item.value.toFixed(1)}</b><small>${min}–${max}</small></div>`}).join('')}</div></article>`;
+}
+function influencerGraphEventState(value){
+  const text=String(value||'').trim();if(!text||/N\/?A|SKIPPED|NOT (?:OBSERVED|CALCULATED)/i.test(text))return null;
+  if(/^(NO|NONE|NOT REACHED)$/i.test(text))return false;
+  if(/^(YES|IMPLICIT YES|OBSERVED)$/i.test(text)||influencerTimeSeconds(text)!==null)return true;
+  return null;
+}
+function influencerJourneyFunnel(rows){
+  const stages=[['startsTutorial','STARTED TUTORIAL'],['finishesTutorial','FINISHED TUTORIAL'],['firstCombatAfterTutorial','REACHED COMBAT'],['firstPartAcquired','ACQUIRED A PART'],['firstBuildModification','MODIFIED BUILD'],['firstShopEncounter','REACHED SHOP'],['wanderingMonkEncounter','MET MONK'],['firstCorpseMongerEncounter','MET CORPSE MONGER'],['templePriestEncounter','MET TEMPLE PRIEST'],['finalBossEncounter','REACHED FINAL BOSS'],['playsSecondRound','PLAYED SECOND ROUND']].map(([key,label])=>{const states=rows.map(({video})=>influencerGraphEventState(video.values?.[key])).filter(value=>value!==null),yes=states.filter(Boolean).length;return{key,label,yes,total:states.length,rate:states.length?yes/states.length*100:null}});
+  if(!stages.some(stage=>stage.total))return influencerGraphEmpty('PLAYER JOURNEY FUNNEL','NO JOURNEY EVENTS ARE AVAILABLE IN THIS FILTER.');
+  return`<article class="influencer-graph-card"><header><div><small>REACH RATE</small><h3>PLAYER JOURNEY FUNNEL</h3></div><p>SKIPPED AND UNKNOWN VALUES EXCLUDED</p></header><div class="influencer-funnel">${stages.map(stage=>`<div><span>${escapeHtml(stage.label)}</span><i><em style="width:${stage.rate===null?0:Math.max(2,stage.rate)}%"></em></i><b>${stage.rate===null?'—':Math.round(stage.rate)+'%'}</b><small>${stage.yes}/${stage.total}</small></div>`).join('')}</div></article>`;
+}
+function influencerTimelineChart(rows,mode){
+  const data=INFLUENCER_GRAPH_TIMELINE.map(([key,label])=>{const values=rows.map(({video})=>influencerTimeSeconds(video.values?.[key])).filter(value=>value!==null),value=influencerGraphCentral(values,mode);return{key,label,values,value}}),available=data.filter(item=>item.value!==null),max=Math.max(1,...available.map(item=>item.value));
+  if(!available.length)return influencerGraphEmpty('FIRST-EXPERIENCE TIMELINE','NO EXACT TIMESTAMPS ARE AVAILABLE IN THIS FILTER.');
+  return`<article class="influencer-graph-card"><header><div><small>${mode.toUpperCase()} TIMESTAMP</small><h3>FIRST-EXPERIENCE TIMELINE</h3></div><p>EXACT SRT TIMES ONLY</p></header><div class="influencer-timeline-chart">${data.map(item=>`<div><span>${escapeHtml(item.label)}</span><i><em style="width:${item.value===null?0:item.value/max*100}%"></em></i><b>${item.value===null?'—':influencerFormatTime(item.value)}</b><small>${item.values.length} VIDEO${item.values.length===1?'':'S'}</small></div>`).join('')}</div></article>`;
+}
+function influencerHeatmap(rows){
+  const fields=INFLUENCER_GRAPH_SCORE_KEYS.map(key=>({key,label:INFLUENCER_VIDEO_FIELDS.find(field=>field.key===key)?.label||key}));
+  if(!rows.some(({video})=>fields.some(field=>influencerScore(video.values?.[field.key])!==null)))return influencerGraphEmpty('VIDEO COMPARISON HEATMAP','NO NUMERIC SCORES ARE AVAILABLE IN THIS FILTER.');
+  const sorted=rows.slice().sort((left,right)=>left.creator.name.localeCompare(right.creator.name)||(left.video.date||'').localeCompare(right.video.date||''));
+  return`<article class="influencer-graph-card influencer-graph-wide"><header><div><small>ALL SCORE SIGNALS</small><h3>VIDEO COMPARISON HEATMAP</h3></div><p>RED = LOW // YELLOW = MID // GREEN = HIGH</p></header><div class="influencer-heatmap-scroll"><table><thead><tr><th>CREATOR / VIDEO</th>${fields.map(field=>`<th title="${escapeHtml(field.label)}">${escapeHtml(field.label)}</th>`).join('')}</tr></thead><tbody>${sorted.map(({creator,video})=>`<tr><th><b>${escapeHtml(creator.name)}</b><small>${escapeHtml(influencerDisplayDate(video.date).toUpperCase())}</small></th>${fields.map(field=>{const score=influencerScore(video.values?.[field.key]);return score===null?'<td class="heatmap-empty">—</td>':`<td style="--heat-hue:${Math.round((score-1)/9*120)}"><span>${score}</span></td>`}).join('')}</tr>`).join('')}</tbody></table></div></article>`;
+}
+function renderInfluencerGraphs(creators){
+  const creatorSelect=$('influencerGraphCreator'),selected=creatorSelect.value;
+  creatorSelect.innerHTML='<option value="">ALL CREATORS</option>'+influencerCreators().slice().sort((left,right)=>left.name.localeCompare(right.name)).map(creator=>`<option value="${creator.id}">${escapeHtml(creator.name)}</option>`).join('');
+  if([...creatorSelect.options].some(option=>option.value===selected))creatorSelect.value=selected;
+  const rows=influencerGraphRows(creators),mode=$('influencerGraphAggregate').value||'average',dates=rows.map(({video})=>video.date).filter(Boolean).sort(),scored=rows.filter(({video})=>INFLUENCER_GRAPH_SCORE_KEYS.some(key=>influencerScore(video.values?.[key])!==null)).length;
+  $('influencerGraphSummary').innerHTML=`<article><small>VIDEOS IN VIEW</small><b>${rows.length}</b></article><article><small>CREATORS IN VIEW</small><b>${new Set(rows.map(row=>row.creator.id)).size}</b></article><article><small>VIDEOS WITH SCORES</small><b>${scored}</b></article><article><small>DATE RANGE</small><b>${dates.length?`${escapeHtml(influencerDisplayDate(dates[0]).toUpperCase())}<i>TO</i>${escapeHtml(influencerDisplayDate(dates.at(-1)).toUpperCase())}`:'—'}</b></article>`;
+  $('influencerGraphGrid').innerHTML=rows.length?[influencerUnderstandingBubble(rows),influencerScoreBars(rows,mode),influencerJourneyFunnel(rows),influencerTimelineChart(rows,mode),influencerHeatmap(rows)].join(''):'<div class="business-empty influencer-graph-no-results">NO VIDEOS MATCH THESE GRAPH FILTERS</div>';
+}
 function renderInfluencerAnalysis(){
   ensureInfluencerAnalysisSeed({persist:false});
   const creators=influencerCreators(),videos=influencerVideos(),query=($('influencerSearch')?.value||'').trim().toLowerCase(),sort=$('influencerSort')?.value||'name-asc';
@@ -229,12 +303,15 @@ function renderInfluencerAnalysis(){
   $('influencerEnjoymentAverage').textContent=enjoymentScores.length?(enjoymentScores.reduce((sum,value)=>sum+value,0)/enjoymentScores.length).toFixed(1):'—';
   $('influencerResultCount').textContent=`${rows.length} CREATOR${rows.length===1?'':'S'} // ${rows.reduce((sum,creator)=>sum+influencerCreatorVideos(creator.id).length,0)} VIDEOS`;
   $('influencerEmpty').hidden=rows.length>0;
-  const comparisonMode=influencerViewMode==='comparison';
-  $('influencerFilesMode').classList.toggle('active',!comparisonMode);
+  const comparisonMode=influencerViewMode==='comparison',graphsMode=influencerViewMode==='graphs',filesMode=!comparisonMode&&!graphsMode;
+  $('influencerFilesMode').classList.toggle('active',filesMode);
   $('influencerComparisonMode').classList.toggle('active',comparisonMode);
-  $('influencerCreatorList').hidden=comparisonMode;
+  $('influencerGraphsMode').classList.toggle('active',graphsMode);
+  $('influencerCreatorList').hidden=!filesMode;
   $('influencerComparison').hidden=!comparisonMode;
+  $('influencerGraphs').hidden=!graphsMode;
   if(comparisonMode)renderInfluencerComparison(rows);
+  if(graphsMode)renderInfluencerGraphs(rows);
   $('influencerCreatorList').innerHTML=rows.map(creator=>{
     const creatorVideos=influencerCreatorVideos(creator.id).sort((left,right)=>(right.date||'').localeCompare(left.date||''));
     const latest=creatorVideos[0]?.date||'';
@@ -279,6 +356,9 @@ $('influencerSearch').oninput=renderInfluencerAnalysis;
 $('influencerSort').onchange=renderInfluencerAnalysis;
 $('influencerFilesMode').onclick=()=>{influencerViewMode='files';renderInfluencerAnalysis()};
 $('influencerComparisonMode').onclick=()=>{influencerViewMode='comparison';renderInfluencerAnalysis()};
+$('influencerGraphsMode').onclick=()=>{influencerViewMode='graphs';renderInfluencerAnalysis()};
+['influencerGraphCreator','influencerGraphDateFrom','influencerGraphDateTo','influencerGraphAggregate'].forEach(id=>$(id).onchange=renderInfluencerAnalysis);
+$('influencerGraphClear').onclick=()=>{$('influencerGraphCreator').value='';$('influencerGraphDateFrom').value='';$('influencerGraphDateTo').value='';$('influencerGraphAggregate').value='average';renderInfluencerAnalysis()};
 document.querySelectorAll('.influencer-creator-close').forEach(button=>button.onclick=()=>$('influencerCreatorDialog').close());
 document.querySelectorAll('.influencer-video-close').forEach(button=>button.onclick=()=>$('influencerVideoDialog').close());
 $('influencerCreatorForm').onsubmit=event=>{
