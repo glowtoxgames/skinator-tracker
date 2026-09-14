@@ -33,10 +33,7 @@ renderModifiers=function(){
   const source=state.modifiers;
   const rows=source.filter(modifier=>modifierCategoryMatches(modifier)&&(state.modGrade==='All'||modifier.grade===state.modGrade)&&(modifier.isSpawn?state.modZone==='All':zoneMatches(modifier))&&`${modifier.name} ${modifier.description} ${modifier.workingNote||''} ${modifier.grade} ${modifier.category}`.toLowerCase().includes(query));
   $('navModCount').textContent=source.length;
-  $('modifierCount').textContent=source.length;
-  $('godEyeCount').textContent=state.modifiers.filter(modifier=>modifier.category==='God Eye').length;
-  $('iconCount').textContent=state.modifiers.filter(modifier=>modifier.icon||modifier.iconData).length;
-  $('superCount').textContent=state.modifiers.filter(modifier=>modifier.superEnabled).length;
+  renderModifierSummaryCounts(source);
   $('modifierResultCount').textContent=plural(rows.length,'RESULT');
   $('modifierGrid').innerHTML=rows.map(modifier=>`<article class="mod-card ${modifier.isSpawn?'spawn-database-card':''}" data-id="${modifier.id}" data-spawn="${modifier.isSpawn?'true':'false'}">${modifier.icon||modifier.iconData?`<img class="mod-icon" src="${mediaSrc(modifier)}" onerror="this.style.opacity=.12">`:'<i class="mod-icon spawn-db-placeholder">?</i>'}<div><div class="mod-meta">${modifier.isSpawn?`SPAWN // ${escapeHtml(modifier.category).toUpperCase()}`:`${escapeHtml(modifier.category).toUpperCase()} // ${escapeHtml(modifier.zone||'GLOBAL')}`}${modifier.superEnabled?`<span class="super-mark">✦ SUPER ${modifier.superGrade||modifier.grade}</span>`:''}</div><h3>${escapeHtml(modifier.name)}</h3><p>${modifierDescriptionHtml(modifier.description)}</p>${modifier.working===false&&modifier.workingNote?`<p class="modifier-working-note">⚠ ${escapeHtml(modifier.workingNote)}</p>`:''}</div><div class="modifier-card-state"><span class="modifier-working-badge ${modifier.working===false?'not-working':''}">${modifier.working===false?'NOT WORKING':'WORKING'}</span><img class="grade-icon" src="${gradeIcon(modifier.grade)}" alt="Grade ${modifier.grade}" title="Grade ${modifier.grade}"></div></article>`).join('');
   document.querySelectorAll('.mod-card').forEach(card=>card.onclick=()=>openModifier(card.dataset.id));
