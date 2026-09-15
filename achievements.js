@@ -1,35 +1,55 @@
 const ACHIEVEMENT_KEY='skinator-achievements-v1';
 const ACHIEVEMENT_ICON_BASE='assets/achievements/';
+const ACHIEVEMENT_SEED_VERSION=2;
+const ACHIEVEMENT_SEED_UPDATED_AT='2026-09-15T00:00:00.000Z';
 const ACHIEVEMENT_SEED=[
-  ['ACH_OPERATOR_LICENSE','OPERATOR LICENSE','Complete the tutorial.','ach_OperatorLicense'],
-  ['ACH_EVOLUTION','EVOLUTION','Replace one of your body parts.','ach_evolution'],
-  ['ACH_SEEKER','SEEKER','Use the reset button on the Body part swap screen.','ach_seeker'],
-  ['ACH_FIRST_BLOOD','FIRST BLOOD','Defeat your first enemy in the main game.','ach_firstBlood'],
-  ['ACH_DOMINATION','DOMINATION','Beat Knu Rao.','ach_DOMINATION'],
-  ['ACH_MASTERY','MASTERY','Beat 5 enemies in the main game.','ach_mastery'],
-  ['ACH_CLEANUP','CLEANUP','Defeat 10 enemies in a single run.','ach_cleanup'],
-  ['ACH_THIRST','THIRST','Drink a potion.','ach_thirst'],
-  ['ACH_BUSINESS','BUSINESS','Buy a body part from the Shop Keeper.','ach_business'],
-  ['ACH_CONTABAND','CONTABAND','Purchase a spin at the Corpse Monger.','ach_contraband'],
-  ['ACH_CURSE','CURSE','Ascend a part with the Temple Priest.','ach_curse'],
-  ['ACH_MOGUL','MOGUL','Buy all 3 parts at the Shop Keeper in a single interaction.','ach_mogul-copy'],
-  ['ACH_UNMATCHED','UNMATCHED','Beat Knu Rao with more than 50% of your Health Pool remaining.','ach_FlawlessVictory'],
-  ['ACH_REPLACEMENT','REPLACEMENT','Replace all default skeleton parts in a single run.','ach_replacement'],
-  ['ACH_BETRAYAL','BETRAYAL','Get the crow card at the Wandering Monk.','ach_Betrayal'],
-  ['ACH_PATH_FINDER','PATH FINDER','Talk with every NPC on the map.','ach_pathfinde'],
-  ['ACH_FORGIVENESS','FORGIVENESS','Escape from a fight.','ach_forgiveness-copy'],
-  ['ACH_BRITTLE_BONE','BRITTLE BONE','Get your Health Pool under 10 max health.','ach_brittleBone-copy'],
-  ['ACH_IRON_SKIN','IRON SKIN','Get your max health in the Health Pool to 50 points.','ach_ironskin-copy'],
-  ['ACH_RIP','RIP','Talk with Oborogumo.','ach_RIP'],
-  ['ACH_TARGET_ACQUIRED','TARGET ACQUIRED','Get into a fight with Knu Rao.','ach_TargetAcquired'],
-  ['ACH_STURDINESS','STURDINESS','Get your max health in the Health Pool to 30 points.','ach_sturdiness'],
-  ['ACH_LUCK','LUCK','Get a part from the Corpse Monger.','ach_luck'],
-  ['ACH_MUTATION','MUTATION','Get a body part with 3 modifiers.','ach_mutation'],
-  ['ACH_VELOCITY','VELOCITY','Get your max speed over 40 points.','ach_velocity'],
-  ['ACH_BURIAL','BURIAL','Die in the main game.','ach_burrial'],
-  ['ACH_RESURRECTION','RESURRECTION','Play a second run.','ach_Resurrection'],
-  ['ACH_SKINATOR','SKINATOR','Get all body parts in your collection.','ach_skinator'],
-  ['ACH_OBLITERATION','OBLITERATION','', 'ach_OBLITERATION-copy']
+  ['ACH_DOMINATION','DOMINATION','BEAT KNU-RAO.','domination'],
+  ['ACH_VETERAN','VETERAN','DEFEAT BOTH SANGO AND KNU-RAO AT LEAST ONCE.','veteran'],
+  ['ACH_PERSUATION','PERSUASION',"EXTRACT KNU-RAO'S SPAWN.",'persuasion'],
+  ['ACH_EVOLUTION','EVOLUTION','REPLACE ONE OF YOUR BODY PARTS.','evolution'],
+  ['ACH_SEEKER','SEEKER','USE THE RESET BUTTON ON THE BODY PART SWAP SCREEN.','seeker'],
+  ['ACH_OPERATOR_LICENSE','OPERATOR LICENSE','COMPLETE THE TUTORIAL.','operator_license'],
+  ['ACH_FIRST_BLOOD','FIRST BLOOD','DEFEAT AN ENEMY IN THE MAIN GAME.','first_blood'],
+  ['ACH_MASTERY','MASTERY','BEAT 5 ENEMIES IN THE MAIN GAME.','mastery'],
+  ['ACH_CLEANUP','CLEANUP','DEFEAT 10 ENEMIES IN A SINGLE RUN.','cleanup'],
+  ['ACH_THIRST','THIRST','DRINK A POTION.','thirst'],
+  ['ACH_BUSINESS','BUSINESS','BUY A BODY PART FROM THE SHOP KEEPER.','business'],
+  ['ACH_CONTABAND','CONTABAND','PURCHASE A SPIN AT THE CORPSE MONGER.','contraband'],
+  ['ACH_CURSE','CURSE','ASCEND A PART WITH THE TEMPLE PRIEST.','curse'],
+  ['ACH_DEXTERITY','DEXTERITY','SKINATE KNU-RAO.','dexterity'],
+  ['ACH_SKINATED','SKINATED','SKINATE AN ENEMY.','skinated'],
+  ['ACH_MOGUL','MOGUL','BUY ALL 3 PARTS AT THE SHOP KEEPER IN A SINGLE INTERACTION.','mogul'],
+  ['ACH_UNMATCHED','UNMATCHED','BEAT KNU-RAO WITH AT LEAST HALF YOUR MAXIMUM HEALTH REMAINING.','unmatched'],
+  ['ACH_REPLACEMENT','REPLACEMENT','REPLACE ALL DEFAULT SKELETON PARTS IN A SINGLE RUN.','replacement'],
+  ['ACH_BETRAYAL','BETRAYAL','GET THE CROW CARD AT THE WANDERING MONK.','betrayal'],
+  ['ACH_OBLITERATION','OBLITERATION','DEFEAT EVERY ENEMY ON A SINGLE MAP.','obliteration'],
+  ['ACH_PATH_FINDER','PATH FINDER','TALK WITH EVERY NPC ON THE MAP.','path_finder'],
+  ['ACH_FORGIVENESS','FORGIVENESS','ESCAPE FROM A FIGHT.','forgiveness'],
+  ['ACH_BRITTLE_BONE','BRITTLE BONE','GET YOUR HEALTH POOL UNDER 10 MAX HEALTH.','brittle_bone'],
+  ['ACH_IRON_SKIN','IRON SKIN','GET YOUR MAX HEALTH IN THE HEALTH POOL TO 50 POINTS.','iron_skin'],
+  ['ACH_RIP','RIP','TALK WITH OBOROGUMO.','rip'],
+  ['ACH_TARGET_ACQUIRED','TARGET ACQUIRED','GET INTO A FIGHT WITH KNU-RAO.','target_acquired'],
+  ['ACH_STURDINESS','STURDINESS','GET YOUR MAX HEALTH IN THE HEALTH POOL TO 30 POINTS.','sturdiness'],
+  ['ACH_LUCK','LUCK','GET A PART FROM THE CORPSE MONGER.','luck'],
+  ['ACH_MUTATION','MUTATION','GET A BODY PART WITH 3 MODIFIERS.','mutation'],
+  ['ACH_VELOCITY','VELOCITY','GET YOUR MAX SPEED OVER 40 POINTS.','velocity'],
+  ['ACH_BURIAL','BURIAL','DIE IN THE MAIN GAME.','burial'],
+  ['ACH_RESURRECTION','RESURRECTION','PLAY A SECOND RUN.','resurrection'],
+  ['ACH_SKINATOR','SKINATOR','NO DESC. NOT YET USED.','skinator'],
+  ['ACH_ACTIVATION','ACTIVATION','USE A SPAWN ABILITY FOR THE FIRST TIME.','activation'],
+  ['ACH_INTROSPECTION','INTROSPECTION','EQUIP GRAVEYARD DRONE PET.','introspection'],
+  ['ACH_AUTOPSY','AUTOPSY','CLICK THE INSPECT BUTTON IN THE BODY PART SWAP SCREEN.','autopsy'],
+  ['ACH_MENAGERIE','MENAGERIE','CHECK SPAWN INVENTORY IN THE MAIN MENU.','menagerie'],
+  ['ACH_ENCYCLOPEDIA','ENCYCLOPEDIA','GET ALL BODY PARTS FROM GRAVEYARD.','encyclopedia'],
+  ['ACH_ACCLIMATION','ACCLIMATION','DEFEAT 3 ENEMIES.','acclimation'],
+  ['ACH_BIOLOGY','BIOLOGY','CHECK PARASITE INVENTORY IN THE MAIN MENU.','biology'],
+  ['ACH_RESEARCH','RESEARCH','CHECK YOUR MODIFIER INVENTORY IN THE MAIN MENU.','research'],
+  ['ACH_EXORCIST','EXORCIST','SELECT SANGO AS TARGET IN THE MAIN MENU','exorcist'],
+  ['ACH_SERVANT','SERVANT',"EQUIP GENKE'S SPAWN",'servant'],
+  ['ACH_OSTENTATION','OSTENTATION','EQUIP KNU-RAO SPAWN.','ostentation'],
+  ['ACH_PURIFICATION','PURIFICATION','DEFEAT SANGO.','purification'],
+  ['ACH_MITOSIS','MITOSIS','GET GRAVEYARD DRONE PET.','mitosis'],
+  ['ACH_CAPTURE','CAPTURE',"EXTRACT GENKE'S SPAWN.",'capture']
 ].map(([apiName,displayName,description,fileBase],index)=>({
   id:apiName.toLowerCase(),
   order:index,
@@ -38,19 +58,38 @@ const ACHIEVEMENT_SEED=[
   displayName,
   description,
   hidden:false,
-  unlockedIcon:`${ACHIEVEMENT_ICON_BASE}${fileBase}_unlocked.png`,
-  lockedIcon:`${ACHIEVEMENT_ICON_BASE}${fileBase}_locked.png`,
-  updatedAt:new Date().toISOString()
+  unlockedIcon:`${ACHIEVEMENT_ICON_BASE}ach_${fileBase}_unlocked.png`,
+  lockedIcon:`${ACHIEVEMENT_ICON_BASE}ach_${fileBase}_locked.png`,
+  seedVersion:ACHIEVEMENT_SEED_VERSION,
+  updatedAt:ACHIEVEMENT_SEED_UPDATED_AT
 }));
 
+const achievementRecordKey=record=>String(record?.apiName||record?.id||'').trim().toUpperCase();
 function mergeAchievementSeed(records=[]){
-  const existing=new Map(records.map(record=>[record.apiName||record.id,record]));
-  return ACHIEVEMENT_SEED.map(seed=>({...seed,...(existing.get(seed.apiName)||existing.get(seed.id)||{})}))
-    .concat(records.filter(record=>!ACHIEVEMENT_SEED.some(seed=>seed.apiName===(record.apiName||record.id))));
+  const existing=new Map();
+  records.forEach(record=>{
+    existing.set(achievementRecordKey(record),record);
+    if(record.id)existing.set(String(record.id).trim().toUpperCase(),record);
+  });
+  const seedKeys=new Set(ACHIEVEMENT_SEED.flatMap(seed=>[achievementRecordKey(seed),String(seed.id).toUpperCase()]));
+  let migrated=false;
+  const seeded=ACHIEVEMENT_SEED.map(seed=>{
+    const record=existing.get(achievementRecordKey(seed))||existing.get(String(seed.id).toUpperCase());
+    if(!record){migrated=true;return{...seed}}
+    if((Number(record.seedVersion)||0)<ACHIEVEMENT_SEED_VERSION){
+      migrated=true;
+      return {...record,...seed,progressStat:record.progressStat||'',hidden:!!record.hidden,deleted:!!record.deleted};
+    }
+    return {...seed,...record};
+  });
+  const extras=records.filter(record=>!seedKeys.has(achievementRecordKey(record))&&!seedKeys.has(String(record.id||'').toUpperCase()));
+  window.skinatorAchievementSeedMigrated=!!window.skinatorAchievementSeedMigrated||migrated;
+  return seeded.concat(extras);
 }
 
 const savedAchievements=(()=>{try{return JSON.parse(localStorage.getItem(ACHIEVEMENT_KEY))||[]}catch{return[]}})();
 let achievements=mergeAchievementSeed(publishedSnapshot?.achievements||savedAchievements);
+if(window.skinatorAchievementSeedMigrated)try{localStorage.setItem(ACHIEVEMENT_KEY,JSON.stringify(achievements))}catch{}
 let editingAchievementId=null;
 let editingAchievementUnlocked='';
 let editingAchievementLocked='';
@@ -70,6 +109,7 @@ document.querySelector('main').insertAdjacentHTML('beforeend',`
   <section class="panel">
     <div class="toolbar achievement-toolbar">
       <label class="search">⌕ <input id="achievementSearch" placeholder="SEARCH ACHIEVEMENTS"></label>
+      <button class="btn red achievement-create" id="achievementCreate" type="button">＋ NEW ACHIEVEMENT</button>
       <label class="achievement-lock-switch"><input id="achievementDisplayLocked" type="checkbox"> DISPLAY LOCKED</label>
       <span id="achievementResultCount"></span>
     </div>
@@ -91,7 +131,7 @@ document.body.insertAdjacentHTML('beforeend',`
       <label>DESCRIPTION<textarea id="achievementDescription" rows="4"></textarea></label>
       <div class="achievement-checks"><label><input id="achievementHidden" type="checkbox"> HIDDEN / SECRET ACHIEVEMENT</label></div>
     </div>
-    <div class="dialog-actions"><span></span><span></span><button type="button" class="btn ghost achievement-close">CANCEL</button><button class="btn red" type="submit">SAVE ACHIEVEMENT</button></div>
+    <div class="dialog-actions"><button type="button" class="btn danger" id="achievementDelete" hidden>DELETE ACHIEVEMENT</button><span></span><button type="button" class="btn ghost achievement-close">CANCEL</button><button class="btn red" type="submit">SAVE ACHIEVEMENT</button></div>
   </form>
 </dialog>`);
 
@@ -112,6 +152,7 @@ document.head.appendChild(achievementZoomStyles);
 if(typeof addNodeZoom==='function')addNodeZoom({viewId:'achievementsView',gridId:'achievementGrid',label:'ACHIEVEMENT',key:'achievements'});
 
 function achievementImage(icon,storagePath,name){
+  if(!icon)return '<span class="achievement-icon-empty">NO ICON</span>';
   const fallback=icon&&storagePath?` data-fallback="${escapeHtml(icon)}"`:'';
   const storage=storagePath?` data-storage-path="${escapeHtml(storagePath)}" onerror="window.skinatorRefreshCloudImage?.(this)"`:'';
   return `<img src="${escapeHtml(icon||'')}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"${storage}${fallback}>`;
@@ -120,12 +161,14 @@ function saveAchievements(){
   localStorage.setItem(ACHIEVEMENT_KEY,JSON.stringify(achievements));
   window.skinatorCloudSave?.();
 }
+const activeAchievements=()=>achievements.filter(record=>!record.deleted);
 function renderAchievements(){
   const query=($('achievementSearch').value||'').toLowerCase();
-  const rows=achievements.filter(record=>`${record.apiName} ${record.progressStat} ${record.displayName} ${record.description}`.toLowerCase().includes(query));
-  $('achievementCount').textContent=achievements.length;
-  $('navAchievementCount').textContent=achievements.length;
-  $('achievementHiddenCount').textContent=achievements.filter(record=>record.hidden).length;
+  const active=activeAchievements();
+  const rows=active.filter(record=>`${record.apiName} ${record.progressStat} ${record.displayName} ${record.description}`.toLowerCase().includes(query));
+  $('achievementCount').textContent=active.length;
+  $('navAchievementCount').textContent=active.length;
+  $('achievementHiddenCount').textContent=active.filter(record=>record.hidden).length;
   $('achievementIconMode').textContent=displayLockedAchievements?'LOCKED':'OPEN';
   $('achievementResultCount').textContent=plural(rows.length,'RESULT');
   $('achievementDisplayLocked').checked=displayLockedAchievements;
@@ -140,7 +183,7 @@ function renderAchievements(){
   document.querySelectorAll('.achievement-card').forEach(card=>card.onclick=()=>openAchievement(card.dataset.id));
 }
 function openAchievement(id){
-  const record=achievements.find(item=>item.id===id);
+  const record=achievements.find(item=>item.id===id&&!item.deleted);
   if(!record)return;
   editingAchievementId=id;
   editingAchievementUnlocked=record.unlockedIcon||'';
@@ -153,7 +196,25 @@ function openAchievement(id){
   $('achievementHidden').checked=!!record.hidden;
   $('achievementUnlockedPreview').src=editingAchievementUnlocked;
   $('achievementLockedPreview').src=editingAchievementLocked;
+  $('achievementDelete').hidden=false;
   $('achievementDialog').showModal();
+}
+function openNewAchievement(){
+  editingAchievementId=null;
+  editingAchievementUnlocked='';
+  editingAchievementLocked='';
+  $('achievementDialogTitle').textContent='NEW ACHIEVEMENT';
+  $('achievementApiName').value='ACH_';
+  $('achievementProgressStat').value='';
+  $('achievementDisplayName').value='';
+  $('achievementDescription').value='';
+  $('achievementHidden').checked=false;
+  $('achievementUnlockedPreview').removeAttribute('src');
+  $('achievementLockedPreview').removeAttribute('src');
+  $('achievementDelete').hidden=true;
+  $('achievementApiName').setCustomValidity('');
+  $('achievementDialog').showModal();
+  $('achievementApiName').focus();
 }
 function acceptAchievementIcon(file,locked){
   fileData(file,data=>{
@@ -163,6 +224,7 @@ function acceptAchievementIcon(file,locked){
 }
 
 $('achievementSearch').oninput=renderAchievements;
+$('achievementCreate').onclick=openNewAchievement;
 $('achievementDisplayLocked').onchange=event=>{
   displayLockedAchievements=event.target.checked;
   localStorage.setItem('skinator-achievements-display-locked',String(displayLockedAchievements));
@@ -173,27 +235,50 @@ $('achievementLockedInput').onchange=event=>acceptAchievementIcon(event.target.f
 setupDrop($('achievementUnlockedDrop'),file=>acceptAchievementIcon(file,false));
 setupDrop($('achievementLockedDrop'),file=>acceptAchievementIcon(file,true));
 document.querySelectorAll('.achievement-close').forEach(button=>button.onclick=()=>$('achievementDialog').close());
-$('achievementApiName').oninput=event=>event.target.value=event.target.value.toUpperCase();
+$('achievementApiName').oninput=event=>{event.target.value=event.target.value.toUpperCase();event.target.setCustomValidity('')};
 $('achievementDisplayName').oninput=event=>event.target.value=event.target.value.toUpperCase();
+$('achievementDelete').onclick=()=>{
+  const record=achievements.find(item=>item.id===editingAchievementId&&!item.deleted);
+  if(!record||!window.confirm(`Delete ${record.displayName||record.apiName}?`))return;
+  record.deleted=true;
+  record.updatedAt=new Date().toISOString();
+  saveAchievements();
+  renderAchievements();
+  $('achievementDialog').close();
+  toast('ACHIEVEMENT DELETED');
+};
 $('achievementForm').onsubmit=event=>{
   event.preventDefault();
   if(!event.currentTarget.reportValidity())return;
-  const record=achievements.find(item=>item.id===editingAchievementId);
-  if(!record)return;
+  const apiName=$('achievementApiName').value.trim().toUpperCase();
+  const duplicate=achievements.find(item=>!item.deleted&&item.apiName===apiName&&item.id!==editingAchievementId);
+  if(duplicate){$('achievementApiName').setCustomValidity('This API name is already in use.');$('achievementApiName').reportValidity();return}
+  let record=achievements.find(item=>item.id===editingAchievementId);
+  const created=!record;
+  if(!record){
+    record=achievements.find(item=>item.deleted&&item.apiName===apiName);
+    if(!record){
+      const id=`achievement-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      record={id,order:Math.max(-1,...achievements.map(item=>Number(item.order)||0))+1};
+      achievements.push(record);
+    }
+  }
   Object.assign(record,{
-    apiName:$('achievementApiName').value.trim().toUpperCase(),
+    apiName,
     progressStat:$('achievementProgressStat').value.trim(),
     displayName:$('achievementDisplayName').value.trim().toUpperCase(),
     description:$('achievementDescription').value.trim(),
     hidden:$('achievementHidden').checked,
     unlockedIcon:editingAchievementUnlocked,
     lockedIcon:editingAchievementLocked,
+    deleted:false,
+    seedVersion:ACHIEVEMENT_SEED_VERSION,
     updatedAt:new Date().toISOString()
   });
   saveAchievements();
   renderAchievements();
   $('achievementDialog').close();
-  toast('ACHIEVEMENT UPDATED');
+  toast(created?'ACHIEVEMENT CREATED':'ACHIEVEMENT UPDATED');
 };
 
 const achievementPreviousSetTab=setTab;

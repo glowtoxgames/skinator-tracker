@@ -33,7 +33,7 @@ function extensionFor(type){return({"image/gif":"gif","image/png":"png","image/j
 async function createPublishSnapshot(){
   const button=$('publishBtn');button.classList.add('publish-working');button.textContent='PACKAGING…';
   try{
-    const database=structuredClone({schemaVersion:5,characters:state.characters,modifiers:state.modifiers,npcs:state.npcs}),publishedParasites=structuredClone(parasytes),publishedAchievements=structuredClone(achievements),publishedPlanner=structuredClone(planner),publishedRoster=structuredClone(rosterView),entries=[],used=new Map();
+    const database=structuredClone({schemaVersion:5,characters:state.characters,modifiers:state.modifiers,npcs:state.npcs}),publishedParasites=structuredClone(parasytes),publishedAchievements=structuredClone(achievements.filter(achievement=>!achievement.deleted)),publishedPlanner=structuredClone(planner),publishedRoster=structuredClone(rosterView),entries=[],used=new Map();
     const extract=async(value,label)=>{if(typeof value!=='string'||!value.startsWith('data:'))return value;const blob=await fetch(value).then(r=>r.blob()),base=safeName(label),count=used.get(base)||0;used.set(base,count+1);const name=`snapshot-assets/${base}${count?`-${count+1}`:''}.${extensionFor(blob.type)}`;entries.push({name,data:blob});return name};
     for(const c of database.characters){c.mainGif=await extract(c.mainGif,`${c.fileName}-360`);c.petImage=await extract(c.petImage,`${c.fileName}-spawn`);for(const [i,v] of (c.variants||[]).entries()){const label=`${c.fileName}-${v.name||`variant-${i+1}`}`;v.gif=await extract(v.gif,label);v.spawnImage=await extract(v.spawnImage,`${label}-spawn`)}}
     for(const m of database.modifiers)m.iconData=await extract(m.iconData,`modifier-${m.name}`);
