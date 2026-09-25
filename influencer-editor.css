@@ -1,0 +1,197 @@
+/* Video-analysis editor
+   Keep the header and actions visible while the complete form scrolls. */
+
+.influencer-video-dialog {
+  width: min(1240px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.influencer-video-dialog form {
+  height: min(920px, calc(100vh - 28px));
+  max-height: calc(100vh - 28px);
+  min-height: 0;
+}
+
+.influencer-video-dialog .dialog-head,
+.influencer-video-dialog .dialog-actions {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 3;
+}
+
+.influencer-video-dialog .dialog-head {
+  padding: 18px 22px;
+  box-shadow: 0 10px 28px #0004;
+}
+
+.influencer-video-dialog .dialog-actions {
+  padding: 13px 22px;
+  box-shadow: 0 -10px 28px #0004;
+}
+
+.influencer-video-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  grid-auto-rows: max-content;
+  gap: 18px;
+  padding: 20px 22px 28px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.influencer-video-editor .influencer-form-section {
+  min-width: 0;
+  min-height: max-content;
+  overflow: clip;
+  border-color: #34373e;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #14161a, #101216);
+  box-shadow: 0 12px 28px #0003;
+}
+
+.influencer-video-editor .influencer-section-title {
+  min-height: 72px;
+  padding: 16px 18px;
+}
+
+.influencer-video-editor .influencer-section-title > span {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+}
+
+.influencer-video-editor .influencer-section-title h3 {
+  font-size: 13px;
+}
+
+.influencer-video-editor .influencer-section-title p {
+  max-width: 720px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.influencer-video-editor .influencer-meta-grid,
+.influencer-video-editor .influencer-field-grid,
+.influencer-video-editor .score-fields,
+.influencer-video-editor .timeline-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 14px;
+  padding: 18px;
+}
+
+.influencer-video-editor .influencer-link-field {
+  grid-column: auto;
+}
+
+.influencer-video-editor label {
+  min-width: 0;
+  color: #9da1a8;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.influencer-video-editor input,
+.influencer-video-editor select,
+.influencer-video-editor textarea {
+  min-height: 42px;
+  margin-top: 8px;
+  border-color: #383c43;
+  border-radius: 4px;
+  background: #191c21;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.influencer-video-editor input:hover,
+.influencer-video-editor select:hover,
+.influencer-video-editor textarea:hover {
+  border-color: #50545c;
+}
+
+.influencer-video-editor .influencer-note-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px;
+}
+
+.influencer-video-editor .influencer-note-grid textarea {
+  min-height: 180px;
+}
+
+@media (max-width: 980px) {
+  .influencer-video-editor .influencer-meta-grid,
+  .influencer-video-editor .influencer-field-grid,
+  .influencer-video-editor .score-fields,
+  .influencer-video-editor .timeline-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .influencer-video-editor .influencer-link-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .influencer-video-dialog {
+    width: calc(100vw - 12px);
+    max-height: calc(100vh - 12px);
+    border-radius: 9px;
+  }
+
+  .influencer-video-dialog form {
+    height: calc(100vh - 12px);
+    max-height: calc(100vh - 12px);
+  }
+
+  .influencer-video-dialog .dialog-head {
+    padding: 14px 16px;
+  }
+
+  .influencer-video-dialog .dialog-head h2 {
+    font-size: 21px;
+  }
+
+  .influencer-video-editor {
+    gap: 12px;
+    padding: 12px 12px 20px;
+    scrollbar-gutter: auto;
+  }
+
+  .influencer-video-editor .influencer-section-title {
+    min-height: 0;
+    align-items: flex-start;
+    padding: 14px;
+  }
+
+  .influencer-video-editor .influencer-meta-grid,
+  .influencer-video-editor .influencer-field-grid,
+  .influencer-video-editor .score-fields,
+  .influencer-video-editor .timeline-fields,
+  .influencer-video-editor .influencer-note-grid {
+    grid-template-columns: 1fr;
+    gap: 13px;
+    padding: 14px;
+  }
+
+  .influencer-video-editor .influencer-link-field {
+    grid-column: auto;
+  }
+
+  .influencer-video-dialog .dialog-actions {
+    grid-template-columns: 1fr 1fr;
+    padding: 10px 12px;
+  }
+
+  .influencer-video-dialog .dialog-actions .danger {
+    grid-column: 1 / -1;
+  }
+
+  .influencer-video-dialog .dialog-actions > span {
+    display: none;
+  }
+}
